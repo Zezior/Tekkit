@@ -1,15 +1,18 @@
 -- pesu_sender.lua
 
 -- Replace with the ID of the power mainframe computer
-local powerMainframeID = 4644  -- Set this to the correct ID
+local powerMainframeID = 4644  -- Update this to your actual mainframe ID
 
 -- Open the modem for Rednet communication
-rednet.open("top")  -- Adjust this if your modem is on a different side
+local modemSide = "top"  -- Change if your modem is on a different side
+if not peripheral.isPresent(modemSide) then
+    print("Error: No modem found on side '" .. modemSide .. "'. Please attach a modem.")
+    return
+end
+rednet.open(modemSide)
 
--- List of connected PESUs
+-- List of connected PESUs and Panels
 local pesuPeripherals = {}
-
--- List of connected Advanced Information Panels
 local panelPeripherals = {}
 
 -- Function to scan for connected peripherals
@@ -19,9 +22,15 @@ local function scanPeripherals()
         local type = peripheral.getType(name)
         if type == "ic2:pesu" then
             table.insert(pesuPeripherals, name)
-        elseif type == "info_panel_advanced" then  -- Advanced Information Panel
+            print("Detected PESU: " .. name)
+        elseif type == "info_panel_advanced" then  -- Adjust if your panel type is different
             table.insert(panelPeripherals, name)
+            print("Detected Advanced Information Panel: " .. name)
         end
+    end
+
+    if #pesuPeripherals == 0 and #panelPeripherals == 0 then
+        print("No PESUs or Advanced Information Panels found. Ensure they are connected via wired modems.")
     end
 end
 
@@ -48,13 +57,24 @@ local function sendData()
     for _, pesuName in ipairs(pesuPeripherals) do
         local pesu = peripheral.wrap(pesuName)
         if pesu then
-            local stored = pesu.getEUStored()
-            local capacity = pesu.getEUCapacity()
+            local stored, capacity = 0, 1000000000  -- Default capacity if getEUCapacity() is unavailable
+            if type(pesu.getEUStored) == "function" then
+                stored = pesu.getEUStored()
+            else
+                print("Warning: 'getEUStored' function not found for PESU '" .. pesuName .. "'.")
+            end
+            if type(pesu.getEUCapacity) == "function" then
+                capacity = pesu.getEUCapacity()
+            else
+                print("Warning: 'getEUCapacity' function not found for PESU '" .. pesuName .. "'. Using default capacity: " .. capacity)
+            end
             table.insert(pesuDataList, {
                 name = pesuName,
                 stored = stored,
                 capacity = capacity
             })
+        else
+            print("Error: Unable to wrap PESU peripheral '" .. pesuName .. "'.")
         end
     end
 
@@ -65,12 +85,18 @@ local function sendData()
         local panel = peripheral.wrap(panelName)
         if panel then
             -- Use getCardDataRaw to get panel data
-            local cardData = panel.getCardDataRaw()
+            local cardData = {}
+            if type(panel.getCardDataRaw) == "function" then
+                cardData = panel.getCardDataRaw()
+            else
+                print("Error: 'getCardDataRaw' function not found for Panel '" .. panelName .. "'.")
+                goto continue_panel
+            end
 
             -- Debug: Print the raw card data
-            print("Raw Card Data for panel:", panelName)
+            print("Raw Card Data for panel '" .. panelName .. "':")
             for key, value in pairs(cardData) do
-                print(key .. ": " .. tostring(value))
+                print("  " .. key .. ": " .. tostring(value))
             end
 
             -- Extract required data
@@ -79,12 +105,16 @@ local function sendData()
             local capacityStr = tostring(cardData.capacity)
 
             -- Debug: Print energy and capacity strings
-            print("EnergyStr:", energyStr)
-            print("CapacityStr:", capacityStr)
+            print("Parsed Energy String: '" .. energyStr .. "'")
+            print("Parsed Capacity String: '" .. capacityStr .. "'")
 
-            -- Remove any spaces or commas from the strings
+            -- Convert strings to numbers by removing spaces and commas
             local energyNum = tonumber(energyStr:gsub("[%s,]", "")) or 0
             local capacityNum = tonumber(capacityStr:gsub("[%s,]", "")) or 0
+
+            -- Debug: Print numeric values
+            print("Numeric Energy: " .. energyNum)
+            print("Numeric Capacity: " .. capacityNum)
 
             -- Calculate average EU/t over 20 seconds
             local history = panelDataHistory[panelName]
@@ -94,10 +124,11 @@ local function sendData()
                 local deltaTime = currentTime - history.lastUpdateTime
                 if deltaTime >= 20 then
                     local deltaEnergy = history.lastEnergy - energyNum
-                    averageEUT = deltaEnergy / deltaTime / 20  -- EU/t (20 ticks per second)
+                    averageEUT = (deltaEnergy) / deltaTime / 20  -- EU/t (20 ticks per second)
                     -- Update history
-                    history.lastUpdateTime = currentTime
-                    history.lastEnergy = energyNum
+                    panelDataHistory[panelName].lastUpdateTime = currentTime
+                    panelDataHistory[panelName].lastEnergy = energyNum
+                    print("Calculated average EU/t for panel '" .. panelName .. "': " .. averageEUT)
                 end
             else
                 -- Initialize history
@@ -105,6 +136,7 @@ local function sendData()
                     lastUpdateTime = currentTime,
                     lastEnergy = energyNum
                 }
+                print("Initialized history for panel '" .. panelName .. "'.")
             end
 
             -- Format energy and capacity with units
@@ -121,6 +153,8 @@ local function sendData()
                 formattedEnergy = formattedEnergy,
                 formattedCapacity = formattedCapacity
             })
+
+            ::continue_panel::
         end
     end
 
@@ -134,7 +168,12 @@ local function sendData()
     }
 
     -- Send data to the power mainframe
-    rednet.send(powerMainframeID, data, "pesu_data")
+    if #pesuDataList > 0 or #panelDataList > 0 then
+        rednet.send(powerMainframeID, data, "pesu_data")
+        print("Data sent to power mainframe.")
+    else
+        print("No data to send.")
+    end
 end
 
 -- Main function
@@ -143,23 +182,13 @@ local function main()
 
     if #pesuPeripherals == 0 and #panelPeripherals == 0 then
         print("No PESUs or Panels found. Ensure they are connected via wired modems.")
-        return
-    end
-
-    print("Found PESUs:")
-    for _, pesuName in ipairs(pesuPeripherals) do
-        print("- " .. pesuName)
-    end
-
-    print("Found Panels:")
-        for _, panelName in ipairs(panelPeripherals) do
-            print("- " .. panelName)
+    else
+        print("Starting data transmission...")
+        -- Send data periodically every 1 second
+        while true do
+            sendData()
+            sleep(1)
         end
-
-    -- Send data periodically
-    while true do
-        sendData()
-        sleep(1)  -- Send data every second
     end
 end
 
