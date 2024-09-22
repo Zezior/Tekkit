@@ -36,7 +36,49 @@ local function formatNumber(num)
     end
 end
 
--- Function to collect data from panels
+-- Function to parse card data and extract Title, Energy, Capacity
+local function parseCardData(cardData)
+    local title = "Unknown"
+    local energyStr = nil
+    local capacityStr = nil
+
+    for _, line in ipairs(cardData) do
+        if line:find("^Title:") then
+            title = line:match("^Title:%s*(.*)")
+        elseif line:find("^[Ee]nergy:") then
+            energyStr = line:match("^[Ee]nergy:%s*([%d%s,]+)")
+        elseif line:find("^[Cc]apacity:") then
+            capacityStr = line:match("^[Cc]apacity:%s*([%d%s,]+)")
+        end
+    end
+
+    -- Debug: Print parsed strings
+    print(string.format("Parsed Title: '%s'", title))
+    print(string.format("Parsed Energy String: '%s'", tostring(energyStr)))
+    print(string.format("Parsed Capacity String: '%s'", tostring(capacityStr)))
+
+    -- Validate and convert energy and capacity
+    if energyStr and capacityStr then
+        -- Remove spaces and commas, then convert to number
+        local energyNum = tonumber(energyStr:gsub("[%s,]", "")) or 0
+        local capacityNum = tonumber(capacityStr:gsub("[%s,]", "")) or 0
+
+        -- Calculate fill percentage
+        local fillPercent = capacityNum > 0 and (energyNum / capacityNum) * 100 or 0
+
+        return {
+            title = title,
+            energy = energyNum,
+            capacity = capacityNum,
+            fillPercent = fillPercent
+        }
+    else
+        print("Error: Unable to parse Energy or Capacity from panel data.")
+        return nil
+    end
+end
+
+-- Function to collect data from panels and calculate Active Usage
 local function collectPanelData(panels, panelHistory)
     local currentTime = os.time()
     local panelDataList = {}
@@ -45,39 +87,22 @@ local function collectPanelData(panels, panelHistory)
         -- Retrieve card data
         local cardData = panel.getCardDataRaw()
 
-        -- Initialize variables
-        local title = "Unknown"
-        local energy = nil
-        local capacity = nil
-
         -- Parse card data
-        for _, line in ipairs(cardData) do
-            if line:find("^Title:") then
-                title = line:match("^Title:%s*(.*)")
-            elseif line:find("^[Ee]nergy:") then
-                energy = line:match("^[Ee]nergy:%s*([%d%s,]+)")
-            elseif line:find("^[Cc]apacity:") then
-                capacity = line:match("^[Cc]apacity:%s*([%d%s,]+)")
-            end
-        end
+        local parsedData = parseCardData(cardData)
 
-        -- Validate and convert energy and capacity
-        if energy and capacity then
-            -- Remove spaces and commas, then convert to number
-            local energyNum = tonumber(energy:gsub("[%s,]", "")) or 0
-            local capacityNum = tonumber(capacity:gsub("[%s,]", "")) or 0
+        if parsedData then
+            local title = parsedData.title
+            local energyNum = parsedData.energy
+            local capacityNum = parsedData.capacity
+            local fillPercent = parsedData.fillPercent
 
-            -- Calculate fill percentage
-            local fillPercent = capacityNum > 0 and (energyNum / capacityNum) * 100 or 0
-
-            -- Check if this panel has previous data
+            -- Calculate Active Usage
             if panelHistory[panel] then
                 local deltaEnergy = panelHistory[panel].energy - energyNum
                 local deltaTicks = currentTime - panelHistory[panel].lastTime
 
-                if deltaTicks >= 20 then
-                    -- Calculate Active Usage (EU/t)
-                    local activeUsage = deltaEnergy / 400  -- 20 ticks/sec * 20 sec = 400 ticks
+                if deltaTicks >= 400 then  -- 400 ticks = 20 seconds (20 ticks/sec)
+                    local activeUsage = deltaEnergy / 400  -- EU/t
 
                     -- Update history
                     panelHistory[panel].energy = energyNum
@@ -92,6 +117,8 @@ local function collectPanelData(panels, panelHistory)
                     })
 
                     print(string.format("Panel '%s' Active Usage: %.2f EU/t", title, activeUsage))
+                else
+                    print(string.format("Panel '%s' - Not enough time elapsed for Active Usage calculation. Delta Ticks: %d", title, deltaTicks))
                 end
             else
                 -- Initialize history for this panel
@@ -101,12 +128,28 @@ local function collectPanelData(panels, panelHistory)
                 }
                 print(string.format("Initialized history for panel '%s'.", title))
             end
-        else
-            print("Warning: Missing Energy or Capacity data in panel.")
         end
     end
 
     return panelDataList
+end
+
+-- Function to send data to the power mainframe
+local function sendData(panelDataList)
+    if #panelDataList > 0 then
+        local data = {
+            command = "panel_data",
+            senderID = os.getComputerID(),
+            panels = panelDataList,
+            timestamp = os.time()
+        }
+
+        -- Send data via rednet
+        rednet.send(powerMainframeID, data, "pesu_data")
+        print("Data sent to power mainframe.")
+    else
+        print("No panel data to send at this time.")
+    end
 end
 
 -- Main Loop
@@ -120,23 +163,14 @@ local function main()
     -- Table to store history for each panel
     local panelHistory = {}
 
+    print("Starting data collection and transmission loop...")
+
     while true do
-        -- Collect data
+        -- Collect panel data
         local panelDataList = collectPanelData(panels, panelHistory)
 
-        -- Prepare data packet
-        if #panelDataList > 0 then
-            local data = {
-                command = "panel_data",
-                senderID = os.getComputerID(),
-                panels = panelDataList,
-                timestamp = os.time()
-            }
-
-            -- Send data to mainframe
-            rednet.send(powerMainframeID, data, "pesu_data")
-            print("Data sent to power mainframe.")
-        end
+        -- Send collected data
+        sendData(panelDataList)
 
         -- Wait for 1 second before next iteration
         sleep(1)
