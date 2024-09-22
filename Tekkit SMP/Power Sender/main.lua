@@ -18,7 +18,7 @@ local function getInfoPanels()
         if peripheral.getType(name) == "info_panel_advanced" then
             local panel = peripheral.wrap(name)
             if panel then
-                table.insert(panels, panel)
+                table.insert(panels, {name = name, panel = panel})
                 print("Detected Advanced Information Panel: " .. name)
             else
                 print("Error: Unable to wrap peripheral '" .. name .. "'.")
@@ -41,17 +41,18 @@ local function formatNumber(num)
     end
 end
 
--- Function to collect data from panels
-local function collectPanelData(panels, panelHistory)
-    local currentTime = os.time()
-    local panelDataList = {}
+-- Function to collect energy data from panels
+local function getPanelEnergyData(panels)
+    local energyData = {}
+    for _, panelInfo in ipairs(panels) do
+        local name = panelInfo.name
+        local panel = panelInfo.panel
 
-    for _, panel in ipairs(panels) do
         -- Retrieve card data
         local cardData = panel.getCardDataRaw()
 
         -- Debug: Print the raw card data
-        print("Raw Card Data for panel:")
+        print("Raw Card Data for panel '" .. name .. "':")
         for _, line in ipairs(cardData) do
             print("  " .. line)
         end
@@ -66,9 +67,9 @@ local function collectPanelData(panels, panelHistory)
             if line:find("^Title:") then
                 title = line:match("^Title:%s*(.*)")
             elseif line:find("^[Ee]nergy:") then
-                energyStr = line:match("^[Ee]nergy:%s*([%d%s,]+)")
+                energyStr = line:match("^[Ee]nergy:%s*([%d%s,%.]+)")
             elseif line:find("^[Cc]apacity:") then
-                capacityStr = line:match("^[Cc]apacity:%s*([%d%s,]+)")
+                capacityStr = line:match("^[Cc]apacity:%s*([%d%s,%.]+)")
             end
         end
 
@@ -78,9 +79,9 @@ local function collectPanelData(panels, panelHistory)
 
         -- Validate and convert energy and capacity
         if energyStr and capacityStr then
-            -- Remove spaces and commas, then convert to number
-            local energyNum = tonumber(energyStr:gsub("[%s,]", "")) or 0
-            local capacityNum = tonumber(capacityStr:gsub("[%s,]", "")) or 0
+            -- Remove spaces, commas, and 'EU', then convert to number
+            local energyNum = tonumber(energyStr:gsub("[%s,EU]", "")) or 0
+            local capacityNum = tonumber(capacityStr:gsub("[%s,EU]", "")) or 0
 
             -- Calculate fill percentage
             local fillPercent = capacityNum > 0 and (energyNum / capacityNum) * 100 or 0
@@ -90,45 +91,18 @@ local function collectPanelData(panels, panelHistory)
             print(string.format("Numeric Capacity: %d EU", capacityNum))
             print(string.format("Fill Percentage: %.2f%%", fillPercent))
 
-            -- Check if this panel has previous data
-            if panelHistory[panel] then
-                local deltaEnergy = panelHistory[panel].energy - energyNum
-                local deltaTicks = currentTime - panelHistory[panel].lastTime
-
-                if deltaTicks >= 20 then  -- 20 seconds
-                    -- Calculate Active Usage (EU/t)
-                    local activeUsage = deltaEnergy / 400  -- 400 ticks = 20 seconds
-
-                    -- Update history
-                    panelHistory[panel].energy = energyNum
-                    panelHistory[panel].lastTime = currentTime
-
-                    -- Prepare data to send
-                    table.insert(panelDataList, {
-                        title = title,
-                        energy = energyNum,
-                        fillPercent = fillPercent,
-                        activeUsage = activeUsage
-                    })
-
-                    print(string.format("Panel '%s' Active Usage: %.2f EU/t", title, activeUsage))
-                else
-                    print(string.format("Not enough ticks elapsed for panel '%s'. Delta Ticks: %d", title, deltaTicks))
-                end
-            else
-                -- Initialize history for this panel
-                panelHistory[panel] = {
-                    energy = energyNum,
-                    lastTime = currentTime
-                }
-                print(string.format("Initialized history for panel '%s'.", title))
-            end
+            -- Store data
+            energyData[name] = {
+                title = title,
+                energy = energyNum,
+                capacity = capacityNum,
+                fillPercent = fillPercent
+            }
         else
-            print("Warning: Missing Energy or Capacity data in panel.")
+            print("Warning: Missing Energy or Capacity data in panel '" .. name .. "'.")
         end
     end
-
-    return panelDataList
+    return energyData
 end
 
 -- Main Loop
@@ -139,14 +113,47 @@ local function main()
         return
     end
 
-    -- Table to store history for each panel
-    local panelHistory = {}
-
-    print("Starting data collection and transmission...")
+    -- Table to store initial energy data
+    local panelHistory = getPanelEnergyData(panels)
+    print("Initial energy data collected.")
 
     while true do
-        -- Collect data
-        local panelDataList = collectPanelData(panels, panelHistory)
+        -- Wait for 20 seconds (400 ticks)
+        print("Waiting for 20 seconds to calculate active usage...")
+        sleep(20)
+
+        -- Collect energy data again
+        local finalEnergy = getPanelEnergyData(panels)
+        print("Final energy data collected.")
+
+        -- Calculate active usage and prepare data to send
+        local panelDataList = {}
+        for name, initial in pairs(panelHistory) do
+            if finalEnergy[name] then
+                local deltaEnergy = initial.energy - finalEnergy[name].energy
+                -- Assuming deltaEnergy positive means energy was consumed
+                local activeUsage = deltaEnergy / 400  -- 400 ticks = 20 seconds
+
+                -- Prevent negative usage (if energy increased)
+                if activeUsage < 0 then
+                    activeUsage = 0
+                end
+
+                table.insert(panelDataList, {
+                    title = initial.title,
+                    energy = finalEnergy[name].energy,
+                    fillPercent = finalEnergy[name].fillPercent,
+                    activeUsage = activeUsage
+                })
+
+                print(string.format("Panel '%s' Active Usage: %.2f EU/t", initial.title, activeUsage))
+
+                -- Update history
+                panelHistory[name] = finalEnergy[name]
+            else
+                print(string.format("Warning: Panel '%s' not found in final energy data.", initial.title))
+            end
+        end
 
         -- Prepare data packet
         if #panelDataList > 0 then
@@ -161,11 +168,8 @@ local function main()
             rednet.send(powerMainframeID, data, "pesu_data")
             print("Data sent to power mainframe.")
         else
-            print("No active usage data to send at this time.")
+            print("No active usage data to send.")
         end
-
-        -- Wait for 1 second before next iteration
-        sleep(1)
     end
 end
 
