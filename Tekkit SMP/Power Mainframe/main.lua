@@ -128,6 +128,7 @@ local function displayHomePage()
     drawButton(1, h - 2, 10, 3, "Home")
     drawButton(12, h - 2, 10, 3, "PESU List")
     drawButton(23, h - 2, 15, 3, "Panel Data")
+    drawButton(39, h - 2, 20, 3, "Messaging Reactor")
 end
 
 -- Function to display PESU list page
@@ -168,6 +169,7 @@ local function displayPESUPage()
     drawButton(1, h - 2, 10, 3, "Home")
     drawButton(12, h - 2, 10, 3, "PESU List")
     drawButton(23, h - 2, 15, 3, "Panel Data")
+    drawButton(39, h - 2, 20, 3, "Messaging Reactor")
 end
 
 -- Function to display panel data page
@@ -209,6 +211,47 @@ local function displayPanelDataPage()
     drawButton(1, h - 2, 10, 3, "Home")
     drawButton(12, h - 2, 10, 3, "PESU List")
     drawButton(23, h - 2, 15, 3, "Panel Data")
+    drawButton(39, h - 2, 20, 3, "Messaging Reactor")
+end
+
+-- Function to display Messaging Reactor Mainframe page
+local function displayMessagingReactorPage()
+    clearMonitor()
+    monitor.setCursorPos(1, 1)
+    monitor.setTextColor(colors.white)
+    monitor.write("Messaging Reactor")
+
+    local y = 3  -- Starting row
+
+    -- Placeholder for Messaging Reactor data
+    -- You can customize this based on your specific requirements
+    monitor.setCursorPos(1, y)
+    monitor.write("Reactor Status: Active")
+    y = y + 1
+
+    monitor.setCursorPos(1, y)
+    monitor.write("Messages:")
+    y = y + 1
+
+    monitor.setCursorPos(1, y)
+    monitor.write("- Reactor connected.")
+    y = y + 1
+
+    monitor.setCursorPos(1, y)
+    monitor.write("- Player activity: Idle")
+    y = y + 1
+
+    -- Draw navigation buttons
+    drawButton(1, h - 2, 10, 3, "Home")
+    drawButton(12, h - 2, 10, 3, "PESU List")
+    drawButton(23, h - 2, 15, 3, "Panel Data")
+    drawButton(39, h - 2, 20, 3, "Messaging Reactor")
+end
+
+-- Function to display player activity based on PESU usage
+local function displayPlayerActivity()
+    -- Placeholder function
+    -- Implement based on your specific requirements
 end
 
 -- Function to display the current page
@@ -219,6 +262,8 @@ local function displayCurrentPage()
         displayPESUPage()
     elseif currentPage == "panel" then
         displayPanelDataPage()
+    elseif currentPage == "messaging" then
+        displayMessagingReactorPage()
     else
         displayHomePage()
     end
@@ -231,6 +276,7 @@ local function handleTouch(x, y)
     -- Home: x=1, y=h-2 to x=10, y=h
     -- PESU List: x=12, y=h-2 to x=21, y=h
     -- Panel Data: x=23, y=h-2 to x=37, y=h
+    -- Messaging Reactor: x=39, y=h-2 to x=58, y=h
     if isWithin(x, y, 1, h - 2, 10, 3) then
         currentPage = "home"
         displayCurrentPage()
@@ -239,6 +285,9 @@ local function handleTouch(x, y)
         displayCurrentPage()
     elseif isWithin(x, y, 23, h - 2, 15, 3) then
         currentPage = "panel"
+        displayCurrentPage()
+    elseif isWithin(x, y, 39, h - 2, 20, 3) then
+        currentPage = "messaging"
         displayCurrentPage()
     end
 end
