@@ -1,15 +1,15 @@
--- power_sender.lua
+-- pesu_sender.lua
 
 -- Configuration
-local modemSide = "top"         -- Adjust the side where the modem is attached
+local modemSide = "top"         -- Adjust the side where the wired modem is attached
 local updateInterval = 5        -- Time in seconds between sending updates
 local mainframeID = 4591        -- Mainframe's Rednet ID
-local peripheralSide = "back"   -- Side where the PESU is connected
+local peripheralSide = "back"   -- Side where the PESU is connected (adjust as needed)
 
--- Open the modem on the specified side
+-- Open the wired modem on the specified side
 rednet.open(modemSide)
 
--- Function to format large numbers (with conversion)
+-- Function to format large numbers
 local function formatNumber(num)
     if num >= 1e12 then
         return string.format("%.1ftril", num / 1e12)
@@ -40,7 +40,7 @@ local function sendPESUData()
     -- Get PESU card data
     local cardData = peripheral.call(peripheralSide, "getCardData")
 
-    -- Extract the PESU name (1st bit of data) and energy value (2nd bit of data)
+    -- Extract the PESU name and energy value
     local pesuName = cardData[1]
     local energyLine = cardData[2]
     local energyValue = extractEnergy(energyLine)
