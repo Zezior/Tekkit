@@ -120,9 +120,9 @@ local function main()
     while true do
         -- Wait for 20 seconds (400 ticks)
         print("Waiting for 20 seconds to calculate active usage...")
-        sleep(20)
+        sleep(20)  -- Sleep for 20 seconds
 
-        -- Collect energy data again
+        -- Collect final energy data
         local finalEnergy = getPanelEnergyData(panels)
         print("Final energy data collected.")
 

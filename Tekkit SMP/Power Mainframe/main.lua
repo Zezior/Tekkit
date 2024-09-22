@@ -86,8 +86,10 @@ local function displayHomePage()
     local totalEnergy = 0
     local totalCapacity = 0
     for _, panel in pairs(panelDataList) do
-        totalEnergy = totalEnergy + panel.energy
-        totalCapacity = totalCapacity + panel.capacity
+        if panel.energy and panel.capacity then
+            totalEnergy = totalEnergy + panel.energy
+            totalCapacity = totalCapacity + panel.capacity
+        end
     end
 
     -- Calculate overall fill percentage
@@ -137,18 +139,22 @@ local function displayPESUListPage()
 
     for _, panel in pairs(panelDataList) do
         if y > 16 then break end  -- Prevent writing beyond the monitor
-        -- Calculate fill percentage
-        local fillPercent = panel.fillPercent
+        if panel.title and panel.energy and panel.capacity then
+            -- Calculate fill percentage
+            local fillPercent = panel.fillPercent
 
-        -- Set color based on fill percentage
-        setColorBasedOnPercentage(fillPercent)
+            -- Set color based on fill percentage
+            setColorBasedOnPercentage(fillPercent)
 
-        -- Write PESU info
-        monitor.setCursorPos(1, y)
-        monitor.write(string.format("PESU: %s", panel.title))
-        monitor.setCursorPos(1, y + 1)
-        monitor.write(string.format("Energy: %s / %s EU (%.2f%%)", formatNumber(panel.energy), formatNumber(panel.capacity), fillPercent))
-        y = y + 3
+            -- Write PESU info
+            monitor.setCursorPos(1, y)
+            monitor.write(string.format("PESU: %s", panel.title))
+            monitor.setCursorPos(1, y + 1)
+            monitor.write(string.format("Energy: %s / %s EU (%.2f%%)", formatNumber(panel.energy), formatNumber(panel.capacity), fillPercent))
+            y = y + 3
+        else
+            print("Warning: Incomplete data for a PESU. Skipping display.")
+        end
     end
 
     -- If no PESUs, display message
@@ -175,24 +181,24 @@ local function displayPanelDataPage()
 
     for _, panel in pairs(panelDataList) do
         if y > 16 then break end  -- Prevent writing beyond the monitor
-        -- Calculate fill percentage
-        local fillPercent = panel.fillPercent
+        if panel.title and panel.energy and panel.capacity and panel.activeUsage then
+            -- Calculate fill percentage
+            local fillPercent = panel.fillPercent
 
-        -- Set color based on fill percentage
-        setColorBasedOnPercentage(fillPercent)
+            -- Set color based on fill percentage
+            setColorBasedOnPercentage(fillPercent)
 
-        -- Write Panel info
-        monitor.setCursorPos(1, y)
-        monitor.write(string.format("Panel: %s", panel.title))
-        monitor.setCursorPos(1, y + 1)
-        monitor.write(string.format("Energy: %s / %s EU (%.2f%%)", formatNumber(panel.energy), formatNumber(panel.capacity), fillPercent))
-        monitor.setCursorPos(1, y + 2)
-        if panel.activeUsage then
+            -- Write Panel info
+            monitor.setCursorPos(1, y)
+            monitor.write(string.format("Panel: %s", panel.title))
+            monitor.setCursorPos(1, y + 1)
+            monitor.write(string.format("Energy: %s / %s EU (%.2f%%)", formatNumber(panel.energy), formatNumber(panel.capacity), fillPercent))
+            monitor.setCursorPos(1, y + 2)
             monitor.write(string.format("Active Usage: %.2f EU/t", panel.activeUsage))
+            y = y + 4
         else
-            monitor.write("Active Usage: Calculating...")
+            print("Warning: Incomplete data for a Panel. Skipping display.")
         end
-        y = y + 4
     end
 
     -- If no panel data, display message
@@ -289,6 +295,8 @@ local function processData()
                 end
                 print("Received data from Sender ID: " .. senderID)
                 displayCurrentPage()
+            else
+                print("Warning: Received malformed data from Sender ID: " .. senderID)
             end
         end
     end
