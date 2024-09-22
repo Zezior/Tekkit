@@ -9,7 +9,7 @@ local style = {
     headerColor = colors.orange,          -- Header text color
     buttonColor = colors.blue,            -- Default button color
     buttonTextColor = colors.white,       -- Button text color
-    
+
     -- Text scales and sizes
     textScale = 0.5,
 }

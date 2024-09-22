@@ -1,8 +1,19 @@
 -- ids.lua
 return {
-    4708,  -- Reactor 1 ID
-    4710,  -- Reactor 2 ID
-    4844,
-    4845,
-    1111
+    reactorIDs = {
+        4708,  
+        4710,
+        4844,
+        4845,
+        4847,
+        4850,
+        4851,
+        4849,
+        4852,
+        4853,
+        4854
+
+    },
+    activityCheckID = 4641,  -- Activity Check Computer ID
+    powerMainframeID = 4644  -- Power Mainframe Computer ID
 }

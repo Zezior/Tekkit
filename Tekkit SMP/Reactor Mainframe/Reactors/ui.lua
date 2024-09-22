@@ -4,6 +4,8 @@ local style = require("style")
 monitor.setTextScale(style.style.textScale)
 local repo = nil  -- This will be assigned the passed repo object from main.lua
 local reactorIDs = {}  -- Initialize the reactorIDs table
+local reactors = {}
+local pages = {}
 local w, h = monitor.getSize()
 
 -- Button logic
@@ -49,12 +51,23 @@ function Button:handlePress()
     if self.reactorID then
         -- Reactor control button
         print("Button pressed for reactorID:", self.reactorID)
-        local id = self.reactorID .. "_state"
-        local currentState = repo.get(id)
+        local id = self.reactorID
+        local currentState = repo.get(id .. "_state")
+        local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
+
+        -- Check if reactor is overheating or in maintenance mode
+        if reactorData.overheating then
+            print("Cannot turn on reactor " .. id .. " because it is overheating.")
+            return
+        end
+        if reactorData.isMaintenance then
+            print("Reactor " .. id .. " is in maintenance mode.")
+            -- Allow individual control even in maintenance mode
+        end
 
         -- Toggle the reactor state
         local newState = not currentState
-        repo.set(id, newState)  -- Update the state locally
+        repo.set(id .. "_state", newState)  -- Update the state locally
 
         -- Send the turn_on/turn_off command via Rednet to the correct reactor ID
         rednet.send(self.reactorID, {command = newState and "turn_on" or "turn_off"})
@@ -67,12 +80,13 @@ function Button:handlePress()
     else
         -- Navigation or other action button
         if self.action == "toggle_all" then
-            -- Toggle all reactors
+            -- Toggle all reactors that are not in maintenance mode and not overheating
             local anyReactorOff = false
             for _, reactor in pairs(reactorIDs) do
                 local id = reactor.id
                 local state = repo.get(id .. "_state")
-                if not state then
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
+                if not state and not reactorData.isMaintenance and not reactorData.overheating then
                     anyReactorOff = true
                     break
                 end
@@ -81,9 +95,12 @@ function Button:handlePress()
             local newState = anyReactorOff  -- If any reactor is off, we turn all on; else, we turn all off
             for _, reactor in pairs(reactorIDs) do
                 local id = reactor.id
-                repo.set(id .. "_state", newState)
-                -- Send command to reactor
-                rednet.send(id, {command = newState and "turn_on" or "turn_off"})
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
+                if not reactorData.isMaintenance and not reactorData.overheating then
+                    repo.set(id .. "_state", newState)
+                    -- Send command to reactor
+                    rednet.send(id, {command = newState and "turn_on" or "turn_off"})
+                end
             end
             -- Update the master button's appearance
             self.text = newState and "All Off" or "All On"
@@ -133,32 +150,51 @@ function detectButtonPress(x, y)
 end
 
 -- Function to create the navigation buttons at the bottom
-local function centerButtons(page)
+local function centerButtons(page, numReactorPages)
     local buttonWidth = 10
     local buttonHeight = 3
-    local totalButtons = 2  -- Adjust this based on the number of pages
+    local totalButtons = 1 + numReactorPages  -- Home + reactor pages
     local totalWidth = totalButtons * (buttonWidth + 2)
     local startX = math.floor((w - totalWidth) / 2) + 1
 
+    local buttons = {}
+    local x = startX
     -- Define the Home button
-    local homeButton = Button:new(nil, startX, h - buttonHeight + 1, buttonWidth, buttonHeight, "Home", page == "home" and colors.green or colors.blue, "home")
+    local homeButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, "Home", page == "home" and colors.green or colors.blue, "home")
     homeButton:draw()
     table.insert(buttonList, homeButton)
+    x = x + buttonWidth + 2
 
-    -- Define the Reactor page button
-    local reactorButton = Button:new(nil, startX + buttonWidth + 2, h - buttonHeight + 1, buttonWidth, buttonHeight, "Reactor", page == "reactor" and colors.green or colors.blue, "reactor")
-    reactorButton:draw()
-    table.insert(buttonList, reactorButton)
+    -- Define Reactor page buttons
+    for i = 1, numReactorPages do
+        local pageName = "Reactors " .. i
+        local action = "reactor" .. i
+        local buttonColor = page == action and colors.green or colors.blue
+        local reactorButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, pageName, buttonColor, action)
+        reactorButton:draw()
+        table.insert(buttonList, reactorButton)
+        x = x + buttonWidth + 2
+    end
 end
 
 -- Function to add reactor control buttons dynamically based on reactor status
-function addReactorControlButtons(reactorID, status, line)
-    print("Adding button for reactorID:", reactorID, "at line:", line)
+function addReactorControlButtons(reactorID, status, x, y, data, buttonWidth)
+    buttonWidth = buttonWidth or 6  -- Default button width if not provided
+    print("Adding button for reactorID:", reactorID, "at position:", x, y)
     local buttonText = status and "Off" or "On"
     local buttonColor = status and colors.red or colors.green
 
+    -- Adjust button if reactor is overheating or in maintenance mode
+    if data.overheating then
+        buttonText = "OH"
+        buttonColor = colors.gray
+    elseif data.isMaintenance then
+        buttonText = "M"
+        buttonColor = colors.orange
+    end
+
     -- Create a new button object for this reactor
-    local button = Button:new(reactorID, 2, line, 6, 1, buttonText, buttonColor)
+    local button = Button:new(reactorID, x, y, buttonWidth, 2, buttonText, buttonColor)
 
     -- Add the button to the list of buttons
     table.insert(buttonList, button)
@@ -167,23 +203,71 @@ function addReactorControlButtons(reactorID, status, line)
     button:draw()
 end
 
+-- Display the reactor lists on the home page
+function displayReactorLists()
+    -- Lists start from line 3
+    local yStart = 3
+    local halfWidth = math.floor(w / 2)
+
+    -- Calculate starting positions for the lists
+    local overheatingWidth = 20  -- Adjust the width as needed
+    local xOverheating = math.floor((halfWidth - overheatingWidth) / 2) + 1
+
+    local maintenanceWidth = 20  -- Adjust the width as needed
+    local xMaintenance = halfWidth + math.floor((halfWidth - maintenanceWidth) / 2) + 1
+
+    -- Display Overheating Reactors
+    monitor.setCursorPos(xOverheating, yStart)
+    monitor.setTextColor(colors.red)
+    monitor.write("Overheating Reactors")
+    local y = yStart + 1
+    for id, reactor in pairs(reactors) do
+        if reactor.overheating then
+            monitor.setCursorPos(xOverheating, y)
+            monitor.setTextColor(style.style.textColor)
+            monitor.write(reactor.reactorName .. " - " .. reactor.temp .. "C")
+            y = y + 1
+        end
+    end
+
+    -- Display Maintenance Reactors
+    monitor.setCursorPos(xMaintenance, yStart)
+    monitor.setTextColor(colors.orange)
+    monitor.write("Maintenance Reactors")
+    y = yStart + 1
+    for id, reactor in pairs(reactors) do
+        if reactor.isMaintenance then
+            monitor.setCursorPos(xMaintenance, y)
+            monitor.setTextColor(style.style.textColor)
+            monitor.write(reactor.reactorName)
+            y = y + 1
+        end
+    end
+end
+
 -- Display Home Page
-function displayHomePage(repoPassed, reactorTablePassed)
+function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed)
     resetButtons()
     repo = repoPassed
     reactorIDs = reactorTablePassed
+    reactors = reactorsPassed
+    pages.numReactorPages = numReactorPagesPassed
     style.applyStyle()
     monitor.clear()
-    monitor.setCursorPos(1, 1)
-    monitor.setTextColor(style.style.headerColor)
-    monitor.write("NuclearCity - Reactor Main Frame")
-    
+    -- Center and color the header
+    local header = "NuclearCity - Reactor Main Frame"
+    local xHeader = math.floor((w - #header) / 2) + 1
+    monitor.setCursorPos(xHeader, 1)
+    monitor.setTextColor(colors.green)
+    monitor.write(header)
+
     -- Determine initial state for the master button
     local anyReactorOff = false
     for _, reactor in pairs(reactorIDs) do
         local id = reactor.id
         local state = repo.get(id .. "_state")
-        if not state then
+        local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
+        if not state and not reactorData.isMaintenance and not reactorData.overheating then
             anyReactorOff = true
             break
         end
@@ -196,8 +280,11 @@ function displayHomePage(repoPassed, reactorTablePassed)
     masterButton:draw()
     table.insert(buttonList, masterButton)
 
+    -- Display overheating and maintenance reactors lists
+    displayReactorLists()
+
     -- Call the centerButtons function to display buttons at the bottom
-    centerButtons("home")
+    centerButtons("home", pages.numReactorPages)
 end
 
 return {

@@ -1,7 +1,15 @@
 -- main.lua
+
 local ui = require("ui")
 local reactorsModule = require("reactors")
-local allowedIDs = require("ids")
+local ids = require("ids")
+
+local reactorIDs = ids.reactorIDs
+local activityCheckID = ids.activityCheckID
+local powerMainframeID = ids.powerMainframeID
+
+table.sort(reactorIDs)
+local minReactorID = reactorIDs[1] or 0
 
 local currentPage = "home"  -- Start on the home page
 local reactors = {}  -- Table to store reactor data
@@ -40,26 +48,50 @@ end
 -- Ensure Rednet is open on the mainframe
 rednet.open("top")  -- Adjust the side as needed for the modem
 
--- Dynamically generate the reactorTable based on allowedIDs
+-- Dynamically generate the reactorTable based on reactorIDs
 local reactorTable = {}
-for index, id in ipairs(allowedIDs) do
+for index, id in ipairs(reactorIDs) do
     reactorTable["Reactor" .. index] = {id = id, name = "Reactor " .. index}
 end
 
--- Initialize reactor states in the repo
+-- Initialize reactor states in the repo and reactors table
 for _, reactor in pairs(reactorTable) do
     repo.set(reactor.id .. "_state", false)  -- Assuming reactors start off
+    reactors[reactor.id] = {
+        reactorName = reactor.name,
+        temp = "N/A",
+        active = false,
+        euOutput = "0",
+        fuelRemaining = "N/A",
+        isMaintenance = false,
+        overheating = false
+    }
 end
 
--- List of pages, allowing for dynamic page addition
+-- Function to request data from all reactors on startup
+local function requestReactorData()
+    for _, reactor in pairs(reactorTable) do
+        rednet.send(reactor.id, {command = "send_data"})
+    end
+end
+
+-- Compute the number of reactor pages
+local totalReactors = #reactorIDs
+local reactorsPerPage = 8  -- Updated to match reactors.lua
+local numReactorPages = math.ceil(totalReactors / reactorsPerPage)
+
+-- Build pages list
 local pages = {
-    home = "Home Page",
-    reactor = "Reactor Status"
+    home = "Home Page"
 }
 
--- Check if senderID is in the allowed list
-local function isAllowedID(senderID)
-    for _, id in ipairs(allowedIDs) do
+for i = 1, numReactorPages do
+    pages["reactor" .. i] = "Reactor Status Page " .. i
+end
+
+-- Check if senderID is in the reactor IDs list
+local function isReactorID(senderID)
+    for _, id in ipairs(reactorIDs) do
         if id == senderID then
             return true
         end
@@ -67,29 +99,132 @@ local function isAllowedID(senderID)
     return false
 end
 
+local reactorsOnDueToPESU = false  -- Track if reactors are turned on due to PESU levels
+local anyPlayerOnline = false  -- Track player online status
+
 -- Function to switch between pages dynamically
 local function switchPage(page)
     if pages[page] then
         currentPage = page
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable)  -- Pass repo and reactorTable
-        elseif currentPage == "reactor" then
-            reactorsModule.displayReactorData(reactors)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+        elseif string.sub(currentPage, 1, 7) == "reactor" then
+            -- Extract page number
+            local pageNumString = string.sub(currentPage, 8)
+            local pageNum = tonumber(pageNumString)
+            if not pageNum then
+                print("Invalid reactor page number:", pageNumString)
+                return
+            end
+            reactorsModule.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
         else
-            ui.displayPlaceholderPage(currentPage)  -- Placeholder for other pages
+            ui.displayPlaceholderPage(currentPage)
         end
     else
         print("Page not found: " .. page)
     end
 end
 
+-- Function to handle messages from the activity check computer
+local function handleActivityCheckMessage(message)
+    if message.command == "player_online" then
+        print("Received player_online command from activity check computer.")
+        anyPlayerOnline = true
+        -- Turn on reactors that are not in maintenance mode or overheating
+        if reactorsOnDueToPESU then
+            for _, reactor in pairs(reactorTable) do
+                local id = reactor.id
+                local state = repo.get(id .. "_state")
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
+                if not reactorData.isMaintenance and not reactorData.overheating then
+                    if not state then
+                        repo.set(id .. "_state", true)
+                        rednet.send(id, {command = "turn_on"})
+                    end
+                end
+            end
+        end
+        -- Update the display
+        if currentPage == "home" then
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+        end
+    elseif message.command == "player_offline" then
+        print("Received player_offline command from activity check computer.")
+        anyPlayerOnline = false
+        -- Turn off all reactors
+        for _, reactor in pairs(reactorTable) do
+            local id = reactor.id
+            local state = repo.get(id .. "_state")
+            if state then
+                repo.set(id .. "_state", false)
+                rednet.send(id, {command = "turn_off"})
+            end
+        end
+        -- Update the display
+        if currentPage == "home" then
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+        end
+    elseif message.command == "check_players" then
+        -- Send player online status to the requester
+        rednet.send(message.senderID, {playersOnline = anyPlayerOnline}, "player_status")
+    else
+        print("Unknown command from activity check computer:", message.command)
+    end
+end
+
+-- Function to handle messages from the power mainframe
+local function handlePowerMainframeMessage(message)
+    if message.command == "turn_on_reactors" then
+        print("Received turn_on_reactors command from power mainframe.")
+        reactorsOnDueToPESU = true
+        -- Turn on reactors that are not in maintenance mode or overheating, and if players are online
+        if anyPlayerOnline then
+            for _, reactor in pairs(reactorTable) do
+                local id = reactor.id
+                local state = repo.get(id .. "_state")
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
+                if not reactorData.isMaintenance and not reactorData.overheating then
+                    if not state then
+                        repo.set(id .. "_state", true)
+                        rednet.send(id, {command = "turn_on"})
+                    end
+                end
+            end
+        else
+            print("Players are offline. Reactors will not be turned on.")
+        end
+    elseif message.command == "turn_off_reactors" then
+        print("Received turn_off_reactors command from power mainframe.")
+        reactorsOnDueToPESU = false
+        -- Turn off all reactors
+        for _, reactor in pairs(reactorTable) do
+            local id = reactor.id
+            local state = repo.get(id .. "_state")
+            if state then
+                repo.set(id .. "_state", false)
+                rednet.send(id, {command = "turn_off"})
+            end
+        end
+    else
+        print("Unknown command from power mainframe:", message.command)
+    end
+
+    -- Update the display
+    if currentPage == "home" then
+        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+    end
+end
+
 -- Main function for receiving reactor data and handling button presses
 local function main()
     -- Display the home page initially
-    ui.displayHomePage(repo, reactorTable)
+    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
 
     -- Bind reactor buttons using repo
     ui.bindReactorButtons(reactorTable, repo)
+
+    -- Request data from all reactors on startup
+    requestReactorData()
 
     -- Listen for button presses and reactor data in parallel
     parallel.waitForAny(
@@ -104,25 +239,68 @@ local function main()
             end
         end,
         function()
-            -- Continuously receive reactor data
+            -- Continuously receive messages
             while true do
-                local senderID, message = rednet.receive()
-                if isAllowedID(senderID) then
-                    print("Received authorized message from reactor ID:", senderID)
+                local senderID, message, protocol = rednet.receive()
+                if senderID == activityCheckID then
+                    -- Handle messages from the activity check computer
+                    message.senderID = senderID
+                    handleActivityCheckMessage(message)
+                elseif senderID == powerMainframeID then
+                    -- Handle messages from the power mainframe
+                    handlePowerMainframeMessage(message)
+                elseif isReactorID(senderID) then
+                    -- Handle messages from reactors
                     if type(message) == "table" and message.id then
-                        reactors[message.id] = message  -- Store the latest reactor data
+                        -- Store the latest reactor data
+                        reactors[message.id] = message
                         print("Reactor data received for ID:", message.id)
                         print("Message content:", textutils.serialize(message))
 
                         -- Update reactor state in repo
                         repo.set(message.id .. "_state", message.active)
 
+                        -- Check for maintenance mode
+                        if string.find(message.reactorName, "-M") then
+                            reactors[message.id].isMaintenance = true
+                        else
+                            reactors[message.id].isMaintenance = false
+                        end
+
+                        -- Check for overheating
+                        local tempString = (message.temp or ""):gsub("[^%d%.]", "")
+                        local temp = tonumber(tempString)
+                        if temp and temp > 4500 then
+                            reactors[message.id].overheating = true
+                            -- Send command to turn off reactor
+                            rednet.send(message.id, {command = "turn_off"})
+                            -- Update state in repo
+                            repo.set(message.id .. "_state", false)
+                            print("Reactor " .. message.id .. " is overheating! Shutting down.")
+                        elseif temp and temp < 3000 then
+                            -- Clear overheating flag if temp is below threshold
+                            reactors[message.id].overheating = false
+                        end
+
                         -- Update display if on reactor page
-                        if currentPage == "reactor" then
-                            reactorsModule.displayReactorData(reactors)
+                        local index = 0
+                        for idx, rid in ipairs(reactorIDs) do
+                            if rid == message.id then
+                                index = idx
+                                break
+                            end
+                        end
+                        local pageNum = math.ceil(index / reactorsPerPage)
+                        if currentPage == "reactor" .. pageNum then
+                            reactorsModule.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
+                        end
+
+                        -- Update home page if necessary
+                        if currentPage == "home" then
+                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
                         end
                     else
-                        print("Invalid message received from:", senderID)
+                        print("Invalid message received from reactor ID:", senderID)
                     end
                 else
                     print("Unauthorized sender ID:", senderID)
