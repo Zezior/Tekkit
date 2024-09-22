@@ -85,76 +85,73 @@ local function sendData()
         local panel = peripheral.wrap(panelName)
         if panel then
             -- Use getCardDataRaw to get panel data
-            local cardData = {}
-            if type(panel.getCardDataRaw) == "function" then
-                cardData = panel.getCardDataRaw()
-            else
+            if type(panel.getCardDataRaw) ~= "function" then
                 print("Error: 'getCardDataRaw' function not found for Panel '" .. panelName .. "'. Skipping this panel.")
-                goto continue_panel
-            end
-
-            -- Debug: Print the raw card data
-            print("Raw Card Data for panel '" .. panelName .. "':")
-            for key, value in pairs(cardData) do
-                print("  " .. key .. ": " .. tostring(value))
-            end
-
-            -- Extract required data
-            local title = cardData.title or "Unknown"
-            local energyStr = tostring(cardData.energy)
-            local capacityStr = tostring(cardData.capacity)
-
-            -- Debug: Print energy and capacity strings
-            print("Parsed Energy String: '" .. energyStr .. "'")
-            print("Parsed Capacity String: '" .. capacityStr .. "'")
-
-            -- Convert strings to numbers by removing spaces and commas
-            local energyNum = tonumber(energyStr:gsub("[%s,]", "")) or 0
-            local capacityNum = tonumber(capacityStr:gsub("[%s,]", "")) or 0
-
-            -- Debug: Print numeric values
-            print("Numeric Energy: " .. energyNum)
-            print("Numeric Capacity: " .. capacityNum)
-
-            -- Calculate average EU/t over 20 seconds
-            local history = panelDataHistory[panelName]
-            local averageEUT = nil
-
-            if history then
-                local deltaTime = currentTime - history.lastUpdateTime
-                if deltaTime >= 20 then
-                    local deltaEnergy = history.lastEnergy - energyNum
-                    averageEUT = deltaEnergy / deltaTime / 20  -- EU/t (20 ticks per second)
-                    -- Update history
-                    panelDataHistory[panelName].lastUpdateTime = currentTime
-                    panelDataHistory[panelName].lastEnergy = energyNum
-                    print("Calculated average EU/t for panel '" .. panelName .. "': " .. averageEUT)
-                end
+                -- Skip to next panel
             else
-                -- Initialize history
-                panelDataHistory[panelName] = {
-                    lastUpdateTime = currentTime,
-                    lastEnergy = energyNum
-                }
-                print("Initialized history for panel '" .. panelName .. "'.")
+                local cardData = panel.getCardDataRaw()
+
+                -- Debug: Print the raw card data
+                print("Raw Card Data for panel '" .. panelName .. "':")
+                for key, value in pairs(cardData) do
+                    print("  " .. key .. ": " .. tostring(value))
+                end
+
+                -- Extract required data
+                local title = cardData.title or "Unknown"
+                local energyStr = tostring(cardData.energy)
+                local capacityStr = tostring(cardData.capacity)
+
+                -- Debug: Print energy and capacity strings
+                print("Parsed Energy String: '" .. energyStr .. "'")
+                print("Parsed Capacity String: '" .. capacityStr .. "'")
+
+                -- Convert strings to numbers by removing spaces and commas
+                local energyNum = tonumber(energyStr:gsub("[%s,]", "")) or 0
+                local capacityNum = tonumber(capacityStr:gsub("[%s,]", "")) or 0
+
+                -- Debug: Print numeric values
+                print("Numeric Energy: " .. energyNum)
+                print("Numeric Capacity: " .. capacityNum)
+
+                -- Calculate average EU/t over 20 seconds
+                local history = panelDataHistory[panelName]
+                local averageEUT = nil
+
+                if history then
+                    local deltaTime = currentTime - history.lastUpdateTime
+                    if deltaTime >= 20 then
+                        local deltaEnergy = history.lastEnergy - energyNum
+                        averageEUT = deltaEnergy / deltaTime / 20  -- EU/t (20 ticks per second)
+                        -- Update history
+                        panelDataHistory[panelName].lastUpdateTime = currentTime
+                        panelDataHistory[panelName].lastEnergy = energyNum
+                        print("Calculated average EU/t for panel '" .. panelName .. "': " .. averageEUT)
+                    end
+                else
+                    -- Initialize history
+                    panelDataHistory[panelName] = {
+                        lastUpdateTime = currentTime,
+                        lastEnergy = energyNum
+                    }
+                    print("Initialized history for panel '" .. panelName .. "'.")
+                end
+
+                -- Format energy and capacity with units
+                local formattedEnergy = formatNumber(energyNum)
+                local formattedCapacity = formatNumber(capacityNum)
+
+                -- Prepare data to send
+                table.insert(panelDataList, {
+                    name = panelName,
+                    title = title,
+                    energy = energyNum,
+                    capacity = capacityNum,
+                    averageEUT = averageEUT,
+                    formattedEnergy = formattedEnergy,
+                    formattedCapacity = formattedCapacity
+                })
             end
-
-            -- Format energy and capacity with units
-            local formattedEnergy = formatNumber(energyNum)
-            local formattedCapacity = formatNumber(capacityNum)
-
-            -- Prepare data to send
-            table.insert(panelDataList, {
-                name = panelName,
-                title = title,
-                energy = energyNum,
-                capacity = capacityNum,
-                averageEUT = averageEUT,
-                formattedEnergy = formattedEnergy,
-                formattedCapacity = formattedCapacity
-            })
-
-            ::continue_panel::
         end
     end
 

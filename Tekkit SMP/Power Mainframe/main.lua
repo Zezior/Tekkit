@@ -77,6 +77,15 @@ local function displayData()
         monitor.write(energyCapacityStr)
         y = y + 1
 
+        -- Calculate percentage
+        local percentage = 0
+        if panelData.capacity and panelData.capacity > 0 then
+            percentage = panelData.energy / panelData.capacity
+        end
+
+        -- Set color based on percentage
+        setColorBasedOnPercentage(percentage)
+
         -- Display Usage
         monitor.setCursorPos(1, y)
         if panelData.averageEUT then
@@ -86,10 +95,13 @@ local function displayData()
         end
         y = y + 2  -- Add space between panels
 
+        -- Reset text color to white for next panel
+        monitor.setTextColor(colors.white)
+
         -- Ensure we don't exceed monitor height
         if y > h - 2 then
             y = 3
-            monitor.setCursorPos(w / 2, 1)
+            monitor.setCursorPos(math.floor(w / 2), 1)
             monitor.write("Additional Panels")
             y = y + 1
         end
@@ -126,4 +138,5 @@ end
 
 -- Start processing data
 print("Power Mainframe is running and waiting for data...")
+displayData()  -- Display initial state
 processData()
