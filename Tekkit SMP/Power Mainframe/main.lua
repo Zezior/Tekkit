@@ -1,15 +1,17 @@
 -- power_mainframe.lua
 
--- Open the modem on the appropriate side
-local modemSide = "top"  -- Change if your modem is on a different side
+-- Configuration
+local monitorSide = "right"     -- Adjust based on your setup
+local modemSide = "top"         -- Adjust based on your setup
+
+-- Open Rednet
 if not peripheral.isPresent(modemSide) then
     print("Error: No modem found on side '" .. modemSide .. "'. Please attach a modem.")
     return
 end
 rednet.open(modemSide)
 
--- Monitor setup
-local monitorSide = "right"  -- Change if your monitor is on a different side
+-- Wrap Monitor
 if not peripheral.isPresent(monitorSide) then
     print("Error: No monitor found on side '" .. monitorSide .. "'. Please attach a monitor.")
     return
@@ -19,17 +21,13 @@ monitor.setTextScale(0.5)
 monitor.setBackgroundColor(colors.black)
 monitor.clear()
 
--- Data storage
-local pesuDataFromSenders = {}
+-- Data Storage
 local panelDataList = {}
 
--- Variables for monitor dimensions
-local w, h = monitor.getSize()
-
--- Current page
+-- UI State
 local currentPage = "home"
 
--- Function to format numbers with units (e.g., k, mil, bil)
+-- Function to format large numbers with units
 local function formatNumber(num)
     if num >= 1e9 then
         return string.format("%.2fbil", num / 1e9)
@@ -51,11 +49,6 @@ local function setColorBasedOnPercentage(percentage)
     else
         monitor.setTextColor(colors.red)
     end
-end
-
--- Function to detect if a click is within a button
-local function isWithin(x, y, btnX, btnY, btnW, btnH)
-    return x >= btnX and x < (btnX + btnW) and y >= btnY and y < (btnY + btnH)
 end
 
 -- Function to draw a button
@@ -82,57 +75,59 @@ local function clearMonitor()
     monitor.clear()
 end
 
--- Function to display home page
+-- Function to display Home Page
 local function displayHomePage()
     clearMonitor()
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.white)
     monitor.write("Power Service Home")
 
-    -- Display Total Stored and Total Capacity
-    local totalStored = 0
+    -- Calculate total energy and capacity
+    local totalEnergy = 0
     local totalCapacity = 0
-    for _, data in pairs(pesuDataFromSenders) do
-        for _, pesu in ipairs(data.pesuDataList) do
-            totalStored = totalStored + pesu.stored
-            totalCapacity = totalCapacity + pesu.capacity
-        end
+    for _, panel in pairs(panelDataList) do
+        totalEnergy = totalEnergy + panel.energy
+        totalCapacity = totalCapacity + panel.capacity
     end
 
-    monitor.setCursorPos(1, 3)
-    monitor.write("Total Stored: " .. formatNumber(totalStored))
-    monitor.setCursorPos(1, 4)
-    monitor.write("Total Capacity: " .. formatNumber(totalCapacity))
+    -- Calculate overall fill percentage
+    local overallFill = totalCapacity > 0 and (totalEnergy / totalCapacity) * 100 or 0
 
-    -- Calculate and display overall average EU/t
-    local totalAverageEUT = 0
+    -- Display statistics
+    monitor.setCursorPos(1, 3)
+    monitor.write("Total Energy: " .. formatNumber(totalEnergy) .. " EU")
+    monitor.setCursorPos(1, 4)
+    monitor.write("Total Capacity: " .. formatNumber(totalCapacity) .. " EU")
+    monitor.setCursorPos(1, 5)
+    monitor.write(string.format("Overall Fill: %.2f%%", overallFill))
+
+    -- Calculate and display active usage
+    local totalActiveUsage = 0
     local count = 0
-    for _, data in pairs(pesuDataFromSenders) do
-        for _, panel in ipairs(data.panelDataList) do
-            if panel.averageEUT then
-                totalAverageEUT = totalAverageEUT + panel.averageEUT
-                count = count + 1
-            end
+    for _, panel in pairs(panelDataList) do
+        if panel.activeUsage then
+            totalActiveUsage = totalActiveUsage + panel.activeUsage
+            count = count + 1
         end
     end
     if count > 0 then
-        local overallAverageEUT = totalAverageEUT / count
-        monitor.setCursorPos(1, 5)
-        monitor.write("Overall Usage: " .. string.format("%.2f EU/t", overallAverageEUT))
+        local averageActiveUsage = totalActiveUsage / count
+        monitor.setCursorPos(1, 6)
+        monitor.write(string.format("Active Usage: %.2f EU/t", averageActiveUsage))
     else
-        monitor.setCursorPos(1, 5)
-        monitor.write("Overall Usage: Calculating...")
+        monitor.setCursorPos(1, 6)
+        monitor.write("Active Usage: Calculating...")
     end
 
-    -- Draw navigation buttons
-    drawButton(1, h - 2, 10, 3, "Home")
-    drawButton(12, h - 2, 10, 3, "PESU List")
-    drawButton(23, h - 2, 15, 3, "Panel Data")
-    drawButton(39, h - 2, 20, 3, "Messaging Reactor")
+    -- Draw Navigation Buttons
+    drawButton(1, 8, 10, 3, "Home")
+    drawButton(12, 8, 10, 3, "PESU List")
+    drawButton(23, 8, 15, 3, "Panel Data")
+    drawButton(39, 8, 20, 3, "Messaging Reactor")
 end
 
--- Function to display PESU list page
-local function displayPESUPage()
+-- Function to display PESU List Page
+local function displayPESUListPage()
     clearMonitor()
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.white)
@@ -140,39 +135,36 @@ local function displayPESUPage()
 
     local y = 3  -- Starting row
 
-    for senderID, data in pairs(pesuDataFromSenders) do
-        for _, pesu in ipairs(data.pesuDataList) do
-            if y > h - 4 then break end  -- Prevent writing beyond the monitor
-            -- Calculate percentage
-            local percentage = 0
-            if pesu.capacity > 0 then
-                percentage = pesu.stored / pesu.capacity
-            end
+    for _, panel in pairs(panelDataList) do
+        if y > 16 then break end  -- Prevent writing beyond the monitor
+        -- Calculate fill percentage
+        local fillPercent = panel.capacity > 0 and (panel.energy / panel.capacity) * 100 or 0
 
-            -- Set color based on percentage
-            setColorBasedOnPercentage(percentage)
+        -- Set color based on fill percentage
+        setColorBasedOnPercentage(fillPercent / 100)
 
-            -- Write PESU info
-            monitor.setCursorPos(1, y)
-            monitor.write(string.format("PESU: %s | %s / %s", pesu.name, formatNumber(pesu.stored), formatNumber(pesu.capacity)))
-            y = y + 1
-        end
+        -- Write PESU info
+        monitor.setCursorPos(1, y)
+        monitor.write(string.format("PESU: %s", panel.title))
+        monitor.setCursorPos(1, y + 1)
+        monitor.write(string.format("Energy: %s / %s EU (%.2f%%)", formatNumber(panel.energy), formatNumber(panel.capacity), fillPercent))
+        y = y + 3
     end
 
     -- If no PESUs, display message
-    if #pesuDataFromSenders == 0 then
+    if next(panelDataList) == nil then
         monitor.setCursorPos(1, 3)
         monitor.write("No PESU data received yet.")
     end
 
-    -- Draw navigation buttons
-    drawButton(1, h - 2, 10, 3, "Home")
-    drawButton(12, h - 2, 10, 3, "PESU List")
-    drawButton(23, h - 2, 15, 3, "Panel Data")
-    drawButton(39, h - 2, 20, 3, "Messaging Reactor")
+    -- Draw Navigation Buttons
+    drawButton(1, 8, 10, 3, "Home")
+    drawButton(12, 8, 10, 3, "PESU List")
+    drawButton(23, 8, 15, 3, "Panel Data")
+    drawButton(39, 8, 20, 3, "Messaging Reactor")
 end
 
--- Function to display panel data page
+-- Function to display Panel Data Page
 local function displayPanelDataPage()
     clearMonitor()
     monitor.setCursorPos(1, 1)
@@ -181,24 +173,26 @@ local function displayPanelDataPage()
 
     local y = 3  -- Starting row
 
-    for senderID, data in pairs(pesuDataFromSenders) do
-        for _, panel in ipairs(data.panelDataList) do
-            if y > h - 4 then break end  -- Prevent writing beyond the monitor
-            -- Calculate percentage
-            local percentage = 0
-            if panel.capacity > 0 then
-                percentage = panel.energy / panel.capacity
-            end
+    for _, panel in pairs(panelDataList) do
+        if y > 16 then break end  -- Prevent writing beyond the monitor
+        -- Calculate fill percentage
+        local fillPercent = panel.capacity > 0 and (panel.energy / panel.capacity) * 100 or 0
 
-            -- Set color based on percentage
-            setColorBasedOnPercentage(percentage)
+        -- Set color based on fill percentage
+        setColorBasedOnPercentage(fillPercent / 100)
 
-            -- Write panel info
-            monitor.setCursorPos(1, y)
-            local usageStr = panel.averageEUT and string.format("%.2f EU/t", panel.averageEUT) or "Calculating..."
-            monitor.write(string.format("Panel: %s | %s / %s | Usage: %s", panel.title, formatNumber(panel.energy), formatNumber(panel.capacity), usageStr))
-            y = y + 1
+        -- Write Panel info
+        monitor.setCursorPos(1, y)
+        monitor.write(string.format("Panel: %s", panel.title))
+        monitor.setCursorPos(1, y + 1)
+        monitor.write(string.format("Energy: %s / %s EU (%.2f%%)", formatNumber(panel.energy), formatNumber(panel.capacity), fillPercent))
+        monitor.setCursorPos(1, y + 2)
+        if panel.activeUsage then
+            monitor.write(string.format("Active Usage: %.2f EU/t", panel.activeUsage))
+        else
+            monitor.write("Active Usage: Calculating...")
         end
+        y = y + 4
     end
 
     -- If no panel data, display message
@@ -207,14 +201,14 @@ local function displayPanelDataPage()
         monitor.write("No panel data received yet.")
     end
 
-    -- Draw navigation buttons
-    drawButton(1, h - 2, 10, 3, "Home")
-    drawButton(12, h - 2, 10, 3, "PESU List")
-    drawButton(23, h - 2, 15, 3, "Panel Data")
-    drawButton(39, h - 2, 20, 3, "Messaging Reactor")
+    -- Draw Navigation Buttons
+    drawButton(1, 8, 10, 3, "Home")
+    drawButton(12, 8, 10, 3, "PESU List")
+    drawButton(23, 8, 15, 3, "Panel Data")
+    drawButton(39, 8, 20, 3, "Messaging Reactor")
 end
 
--- Function to display Messaging Reactor Mainframe page
+-- Function to display Messaging Reactor Mainframe Page
 local function displayMessagingReactorPage()
     clearMonitor()
     monitor.setCursorPos(1, 1)
@@ -224,7 +218,7 @@ local function displayMessagingReactorPage()
     local y = 3  -- Starting row
 
     -- Placeholder for Messaging Reactor data
-    -- You can customize this based on your specific requirements
+    -- Customize this based on your reactor's setup
     monitor.setCursorPos(1, y)
     monitor.write("Reactor Status: Active")
     y = y + 1
@@ -241,17 +235,11 @@ local function displayMessagingReactorPage()
     monitor.write("- Player activity: Idle")
     y = y + 1
 
-    -- Draw navigation buttons
-    drawButton(1, h - 2, 10, 3, "Home")
-    drawButton(12, h - 2, 10, 3, "PESU List")
-    drawButton(23, h - 2, 15, 3, "Panel Data")
-    drawButton(39, h - 2, 20, 3, "Messaging Reactor")
-end
-
--- Function to display player activity based on PESU usage
-local function displayPlayerActivity()
-    -- Placeholder function
-    -- Implement based on your specific requirements
+    -- Draw Navigation Buttons
+    drawButton(1, 8, 10, 3, "Home")
+    drawButton(12, 8, 10, 3, "PESU List")
+    drawButton(23, 8, 15, 3, "Panel Data")
+    drawButton(39, 8, 20, 3, "Messaging Reactor")
 end
 
 -- Function to display the current page
@@ -259,7 +247,7 @@ local function displayCurrentPage()
     if currentPage == "home" then
         displayHomePage()
     elseif currentPage == "pesu" then
-        displayPESUPage()
+        displayPESUListPage()
     elseif currentPage == "panel" then
         displayPanelDataPage()
     elseif currentPage == "messaging" then
@@ -271,30 +259,22 @@ end
 
 -- Function to handle monitor touch events for buttons
 local function handleTouch(x, y)
-    -- Check which button was pressed
-    -- Assuming buttons are:
-    -- Home: x=1, y=h-2 to x=10, y=h
-    -- PESU List: x=12, y=h-2 to x=21, y=h
-    -- Panel Data: x=23, y=h-2 to x=37, y=h
-    -- Messaging Reactor: x=39, y=h-2 to x=58, y=h
-    if isWithin(x, y, 1, h - 2, 10, 3) then
-        currentPage = "home"
-        displayCurrentPage()
-    elseif isWithin(x, y, 12, h - 2, 10, 3) then
-        currentPage = "pesu"
-        displayCurrentPage()
-    elseif isWithin(x, y, 23, h - 2, 15, 3) then
-        currentPage = "panel"
-        displayCurrentPage()
-    elseif isWithin(x, y, 39, h - 2, 20, 3) then
-        currentPage = "messaging"
-        displayCurrentPage()
+    -- Define button regions based on drawButton positions
+    if y >= 8 and y <= 10 then
+        if x >= 1 and x <= 10 then
+            currentPage = "home"
+            displayCurrentPage()
+        elseif x >= 12 and x <= 21 then
+            currentPage = "pesu"
+            displayCurrentPage()
+        elseif x >= 23 and x <= 37 then
+            currentPage = "panel"
+            displayCurrentPage()
+        elseif x >= 39 and x <= 58 then
+            currentPage = "messaging"
+            displayCurrentPage()
+        end
     end
-end
-
--- Function to display data
-local function displayData()
-    displayCurrentPage()
 end
 
 -- Function to process incoming data
@@ -302,18 +282,13 @@ local function processData()
     while true do
         local event, senderID, message, protocol = os.pullEvent("rednet_message")
         if protocol == "pesu_data" then
-            if type(message) == "table" and message.command == "pesu_data" then
-                -- Store the data
-                pesuDataFromSenders[senderID] = message
-
-                -- Process panel data
-                for _, panelData in ipairs(message.panelDataList) do
-                    local panelID = senderID .. "_" .. panelData.name
-                    panelDataList[panelID] = panelData
+            if type(message) == "table" and message.command == "panel_data" then
+                -- Update panel data
+                for _, panel in ipairs(message.panels) do
+                    panelDataList[panel.title] = panel
                 end
-
-                -- Update display
-                displayData()
+                print("Received data from Sender ID: " .. senderID)
+                displayCurrentPage()
             end
         end
     end
@@ -329,7 +304,7 @@ local function monitorHandler()
     end
 end
 
--- Start processing data and handling UI
+-- Main Execution
 print("Power Mainframe is running and waiting for data...")
-displayCurrentPage()  -- Display initial page
+displayCurrentPage()  -- Display initial Home Page
 parallel.waitForAny(processData, monitorHandler)
