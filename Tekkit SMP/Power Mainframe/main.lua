@@ -47,8 +47,6 @@ local function formatNumber(num)
     end
 end
 
--- (Other functions remain the same)
-
 -- Function to process PESU data from sender computers
 local function processPESUData()
     totalStored = 0
@@ -101,7 +99,7 @@ local function processPESUData()
                     existingData.lastUpdateTime = currentTime
                     existingData.lastEnergy = existingData.energy
                     existingData.averageEUT = nil  -- Cannot calculate yet
-                }
+                end
 
                 -- Update the panel data in the list
                 panelDataList[panelID] = existingData
