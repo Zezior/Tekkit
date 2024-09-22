@@ -1,80 +1,109 @@
--- power_mainframe.lua
+-- startup.lua
 
--- Open the modem on the appropriate side
-rednet.open("top")  -- Adjust if necessary
+local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Power%20Sender/"
 
--- Monitor setup
-local monitor = peripheral.wrap("right")  -- Adjust if necessary
-monitor.setTextScale(0.5)
-monitor.setBackgroundColor(colors.black)
-monitor.clear()
+local filesToUpdate = {
+    "main.lua",
+}
 
--- Data storage
-local pesuDataFromSenders = {}
-local panelDataList = {}
+local function printUsage()
+    print("Usage:")
+    print("wget <url> <filename>")
+end
 
--- Function to format numbers (in case you need to format on this side)
-local function formatNumber(num)
-    if num >= 1e9 then
-        return string.format("%.2fbil", num / 1e9)
-    elseif num >= 1e6 then
-        return string.format("%.2fmil", num / 1e6)
-    elseif num >= 1e3 then
-        return string.format("%.2fk", num / 1e3)
+local function get(sUrl)
+    write("Connecting to " .. sUrl .. "... ")
+
+    -- Check if the URL is valid
+    local ok, err = http.checkURL(sUrl)
+    if not ok then
+        print("Failed.")
+        if err then
+            printError(err)
+        end
+        return nil
+    end
+
+    -- Attempt to download the file
+    local response = http.get(sUrl, nil, true)
+    if not response then
+        print("Failed.")
+        return nil
+    end
+
+    print("Success.")
+    local sResponse = response.readAll()
+    response.close()
+    return sResponse
+end
+
+local function createBlankFileIfMissing(filePath)
+    -- Create a blank file if it doesn't exist
+    if not fs.exists(filePath) then
+        print("File does not exist, creating blank file: " .. filePath)
+        local file = fs.open(filePath, "w")  -- Open file for writing (create if missing)
+        file.close()
+    end
+end
+
+local function downloadFile(filePath)
+    local url = githubUrl .. filePath
+    print("Downloading: " .. url)
+
+    -- Ensure the file exists by creating a blank file if necessary
+    createBlankFileIfMissing(filePath)
+
+    -- Use the get function to download the file content
+    local res = get(url)
+    if res then
+        local file = fs.open(filePath, "wb")  -- Open in binary mode for writing
+        file.write(res)
+        file.close()
+        print("Updated " .. filePath)
+        return true
     else
-        return tostring(num)
+        print("Failed to download " .. filePath)
+        return false
     end
 end
 
--- Function to process incoming data
-local function processData()
-    while true do
-        local event, senderID, message, protocol = os.pullEvent("rednet_message")
-        if protocol == "pesu_data" then
-            if type(message) == "table" and message.command == "pesu_data" then
-                -- Store the data
-                pesuDataFromSenders[senderID] = message
+local function fileExists(filePath)
+    return fs.exists(filePath)
+end
 
-                -- Process panel data
-                for _, panelData in ipairs(message.panelDataList) do
-                    local panelID = senderID .. "_" .. panelData.name
-                    panelDataList[panelID] = panelData
-                end
+-- Ensure HTTP API is enabled
+if not http then
+    printError("wget requires http API")
+    printError("Set http_enable to true in ComputerCraft.cfg")
+    return
+end
 
-                -- Update display
-                displayData()
-            end
-        end
+-- Update all files
+for _, file in ipairs(filesToUpdate) do
+    if downloadFile(file) then
+        -- Introduce a small delay to ensure file writes complete
+        sleep(0.5)
     end
 end
 
--- Function to display data
-local function displayData()
-    monitor.clear()
-    monitor.setCursorPos(1, 1)
-    monitor.setTextColor(colors.white)
-    monitor.write("Power Service Stats")
-
-    local y = 3  -- Starting row for panel data
-
-    for _, panelData in pairs(panelDataList) do
-        monitor.setCursorPos(1, y)
-        monitor.write(panelData.title or "Panel")
-        y = y + 1
-
-        monitor.setCursorPos(1, y)
-        monitor.write((panelData.formattedEnergy or "0") .. " / " .. (panelData.formattedCapacity or "0"))
-        y = y + 1
-
-        monitor.setCursorPos(1, y)
-        if panelData.averageEUT then
-            monitor.write("Usage: " .. string.format("%.2f EU/t", panelData.averageEUT))
-        else
-            monitor.write("Usage: Calculating...")
-        end
-        y = y + 2  -- Add space between panels
+-- Verify that all required files exist before running the main program
+local allFilesExist = true
+for _, file in ipairs(filesToUpdate) do
+    if not fileExists(file) then
+        print("Error: File missing - " .. file)
+        allFilesExist = false
     end
 end
 
--- Start processing data
-processData()
+-- Run the main program if all files were successfully downloaded
+if allFilesExist then
+    local success, err = pcall(function()
+        shell.run("main.lua")
+    end)
+
+    if not success then
+        print("Error in startup: " .. err)
+    end
+else
+    print("Startup aborted due to missing files.")
+end
