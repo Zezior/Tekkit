@@ -42,14 +42,26 @@ local function get(sUrl)
     return sResponse
 end
 
+local function createBlankFileIfMissing(filePath)
+    -- Create a blank file if it doesn't exist
+    if not fs.exists(filePath) then
+        print("File does not exist, creating blank file: " .. filePath)
+        local file = fs.open(filePath, "w")  -- Open file for writing (create if missing)
+        file.close()
+    end
+end
+
 local function downloadFile(filePath)
     local url = githubUrl .. filePath
     print("Downloading: " .. url)
 
+    -- Ensure the file exists by creating a blank file if necessary
+    createBlankFileIfMissing(filePath)
+
     -- Use the get function to download the file content
     local res = get(url)
     if res then
-        local file = fs.open(filePath, "wb")
+        local file = fs.open(filePath, "wb")  -- Open in binary mode for writing
         file.write(res)
         file.close()
         print("Updated " .. filePath)
