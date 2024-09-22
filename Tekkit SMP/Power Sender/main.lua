@@ -2,17 +2,18 @@
 
 -- Description:
 -- This script collects power data from both PESUs and Advanced Information Panels (AIPs)
--- connected via wired modems and sends the processed data to the Power Mainframe via wireless Rednet.
+-- connected via wired modems on the "back" side and sends the processed data
+-- to the Power Mainframe via a wireless modem on the "top" side.
 
 -- Configuration
-local wirelessModemSide = "back"    -- Side where the wireless modem is attached (e.g., "back")
-local wiredModemSides = { "left", "right", "front", "bottom", "top" } -- Sides with wired modems connected to peripherals
-local refreshInterval = 2           -- Time in seconds between data sends
-local protocol = "pesu_data"        -- Protocol name for communication
+local wirelessModemSide = "top"      -- Side where the wireless modem is attached
+local wiredModemSide = "back"        -- Side where the wired modems are connected
+local refreshInterval = 2             -- Time in seconds between data sends
+local protocol = "pesu_data"          -- Protocol name for communication
 
 -- Optional: Define mainframe ID if sending to a specific computer
--- If you want to broadcast to all listening computers, you can omit the mainframeID or set it to nil
-local mainframeID = nil              -- Replace with the mainframe's Rednet ID if needed (e.g., 5)
+-- If you want to broadcast to all listening computers, set to nil
+local mainframeID = nil                -- Replace with the mainframe's Rednet ID if needed (e.g., 5)
 
 -- Default capacity for PESUs (adjust as necessary or retrieve dynamically if available)
 local defaultPESUCapacity = 1000000000    -- Example: 1,000,000,000 EU
@@ -49,12 +50,12 @@ local function parseEnergy(energyStr)
 end
 
 -- Function to collect PESU data from a PESU peripheral
-local function collectPESUData(wiredModem, side)
+local function collectPESUData(peripheralObj, peripheralName)
     local pesuDataList = {}
     -- Ensure the peripheral has EUOutput and EUStored methods
-    if wiredModem.EUOutput and wiredModem.EUStored then
-        local successOutput, euOutput = pcall(wiredModem.EUOutput)
-        local successStored, euStored = pcall(wiredModem.EUStored)
+    if peripheralObj.EUOutput and peripheralObj.EUStored then
+        local successOutput, euOutput = pcall(peripheralObj.EUOutput)
+        local successStored, euStored = pcall(peripheralObj.EUStored)
 
         if successOutput and successStored then
             -- Retrieve energy output and stored energy
@@ -62,7 +63,7 @@ local function collectPESUData(wiredModem, side)
             local energyStored = tonumber(euStored) or 0
 
             -- Assign a unique name or identifier for the PESU
-            local pesuName = wiredModem.getName and wiredModem.getName() or "PESU_" .. side
+            local pesuName = peripheralObj.getName and peripheralObj.getName() or "PESU_" .. peripheralName
 
             table.insert(pesuDataList, {
                 title = pesuName,
@@ -70,20 +71,20 @@ local function collectPESUData(wiredModem, side)
                 capacity = defaultPESUCapacity,
             })
         else
-            print("Warning: Failed to retrieve EU data from PESU connected to side '" .. side .. "'.")
+            print("Warning: Failed to retrieve EU data from PESU '" .. peripheralName .. "'.")
         end
     else
-        print("Warning: Peripheral on side '" .. side .. "' does not have EUOutput and EUStored methods.")
+        print("Warning: Peripheral '" .. peripheralName .. "' does not have EUOutput and EUStored methods.")
     end
     return pesuDataList
 end
 
 -- Function to collect panel data from an AIP peripheral
-local function collectPanelData(wiredModem, side)
+local function collectPanelData(peripheralObj, peripheralName)
     local panelDataList = {}
     -- Ensure the peripheral has getCardData method
-    if wiredModem.getCardData then
-        local success, cardDataList = pcall(wiredModem.getCardData)
+    if peripheralObj.getCardData and type(peripheralObj.getCardData) == "function" then
+        local success, cardDataList = pcall(peripheralObj.getCardData)
         if success and type(cardDataList) == "table" then
             for _, card in ipairs(cardDataList) do
                 -- Ensure each card has at least two data points: name and energy
@@ -98,14 +99,14 @@ local function collectPanelData(wiredModem, side)
                         capacity = defaultPESUCapacity,  -- Replace with actual capacity if available
                     })
                 else
-                    print("Warning: Invalid card data format from AIP on side '" .. side .. "'. Each card should be a table with at least two elements.")
+                    print("Warning: Invalid card data format from AIP '" .. peripheralName .. "'. Each card should be a table with at least two elements.")
                 end
             end
         else
-            print("Warning: Failed to retrieve card data from AIP connected to side '" .. side .. "'.")
+            print("Warning: Failed to retrieve card data from AIP '" .. peripheralName .. "'.")
         end
     else
-        print("Warning: Peripheral on side '" .. side .. "' does not have getCardData method.")
+        print("Warning: Peripheral '" .. peripheralName .. "' does not have getCardData method.")
     end
     return panelDataList
 end
@@ -115,34 +116,41 @@ local function collectAllData()
     local pesuDataList = {}
     local panelDataList = {}
 
-    for _, side in ipairs(wiredModemSides) do
-        if peripheral.isPresent(side) then
-            local wiredModem = peripheral.wrap(side)
-            if wiredModem then
+    -- Get all peripheral names
+    local peripheralNames = peripheral.getNames()
+
+    -- Iterate through each peripheral and process accordingly
+    for _, peripheralName in ipairs(peripheralNames) do
+        -- Check if the peripheral is connected via the wired modem side
+        -- Assuming peripherals connected via "back" are named with the "back" prefix or similar
+        -- Adjust the condition based on your naming conventions
+        if string.sub(peripheralName, 1, #wiredModemSide) == wiredModemSide then
+            local peripheralObj = peripheral.wrap(peripheralName)
+            if peripheralObj then
                 -- Determine the type of peripheral
-                local isPESU = wiredModem.EUOutput and wiredModem.EUStored
-                local isAIP = wiredModem.getCardData and type(wiredModem.getCardData) == "function"
+                local isPESU = peripheralObj.EUOutput and peripheralObj.EUStored
+                local isAIP = peripheralObj.getCardData and type(peripheralObj.getCardData) == "function"
 
                 if isPESU then
                     -- Collect PESU data
-                    local pesuData = collectPESUData(wiredModem, side)
+                    local pesuData = collectPESUData(peripheralObj, peripheralName)
                     for _, data in ipairs(pesuData) do
                         table.insert(pesuDataList, data)
                     end
                 elseif isAIP then
                     -- Collect Panel data
-                    local panelData = collectPanelData(wiredModem, side)
+                    local panelData = collectPanelData(peripheralObj, peripheralName)
                     for _, data in ipairs(panelData) do
                         table.insert(panelDataList, data)
                     end
                 else
-                    print("Warning: Peripheral on side '" .. side .. "' is neither a PESU nor an AIP.")
+                    -- Peripheral is neither PESU nor AIP
+                    -- Optionally, handle other peripheral types or ignore
+                    -- print("Info: Peripheral '" .. peripheralName .. "' is neither PESU nor AIP.")
                 end
             else
-                print("Warning: Failed to wrap peripheral on side '" .. side .. "'.")
+                print("Warning: Failed to wrap peripheral '" .. peripheralName .. "'.")
             end
-        else
-            print("Warning: No peripheral present on side '" .. side .. "'.")
         end
     end
 
