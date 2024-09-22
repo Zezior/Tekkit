@@ -1,6 +1,6 @@
 -- startup.lua
 
-local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Power%20Sender/"
+local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Power%20Mainframe/"
 
 local filesToUpdate = {
     "main.lua",
