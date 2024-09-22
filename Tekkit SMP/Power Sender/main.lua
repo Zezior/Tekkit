@@ -95,9 +95,9 @@ local function collectPanelData(panels, panelHistory)
                 local deltaEnergy = panelHistory[panel].energy - energyNum
                 local deltaTicks = currentTime - panelHistory[panel].lastTime
 
-                if deltaTicks >= 400 then  -- 400 ticks = 20 seconds (20 ticks/sec)
+                if deltaTicks >= 20 then  -- 20 seconds
                     -- Calculate Active Usage (EU/t)
-                    local activeUsage = deltaEnergy / 400  -- EU/t
+                    local activeUsage = deltaEnergy / 400  -- 400 ticks = 20 seconds
 
                     -- Update history
                     panelHistory[panel].energy = energyNum
