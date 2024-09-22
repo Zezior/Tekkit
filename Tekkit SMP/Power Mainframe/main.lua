@@ -13,7 +13,10 @@ monitor.clear()
 local pesuDataFromSenders = {}
 local panelDataList = {}
 
--- Function to format numbers (in case you need to format on this side)
+-- Variables for monitor dimensions
+local w, h = monitor.getSize()
+
+-- Function to format numbers
 local function formatNumber(num)
     if num >= 1e9 then
         return string.format("%.2fbil", num / 1e9)
@@ -73,6 +76,12 @@ local function displayData()
             monitor.write("Usage: Calculating...")
         end
         y = y + 2  -- Add space between panels
+    end
+
+    -- If there are no panels, display a message
+    if y == 3 then
+        monitor.setCursorPos(1, y)
+        monitor.write("No panel data received yet.")
     end
 end
 

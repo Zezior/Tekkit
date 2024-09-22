@@ -67,21 +67,10 @@ local function sendData()
             -- Use getCardDataRaw to get panel data
             local cardData = panel.getCardDataRaw()
 
-            -- Debug: Print the raw card data
-            -- Uncomment the following lines if you want to see the raw data
-            -- print("Raw Card Data for panel:", panelName)
-            -- for key, value in pairs(cardData) do
-            --     print(key .. ": " .. tostring(value))
-            -- end
-
             -- Extract required data
             local title = cardData.title or "Unknown"
-            local energyStr = cardData.energy or "0"
-            local capacityStr = cardData.capacity or "0"
-
-            -- Remove spaces from energy and capacity strings
-            local energy = tonumber(energyStr:gsub("%s", "")) or 0
-            local capacity = tonumber(capacityStr:gsub("%s", "")) or 0
+            local energy = tonumber(cardData.energy) or 0
+            local capacity = tonumber(cardData.capacity) or 0
 
             -- Calculate average EU/t over 20 seconds
             local history = panelDataHistory[panelName]
