@@ -67,10 +67,24 @@ local function sendData()
             -- Use getCardDataRaw to get panel data
             local cardData = panel.getCardDataRaw()
 
+            -- Debug: Print the raw card data
+            print("Raw Card Data for panel:", panelName)
+            for key, value in pairs(cardData) do
+                print(key .. ": " .. tostring(value))
+            end
+
             -- Extract required data
             local title = cardData.title or "Unknown"
-            local energy = tonumber(cardData.energy) or 0
-            local capacity = tonumber(cardData.capacity) or 0
+            local energyStr = tostring(cardData.energy)
+            local capacityStr = tostring(cardData.capacity)
+
+            -- Debug: Print energy and capacity strings
+            print("EnergyStr:", energyStr)
+            print("CapacityStr:", capacityStr)
+
+            -- Remove any spaces or commas from the strings
+            local energyNum = tonumber(energyStr:gsub("[%s,]", "")) or 0
+            local capacityNum = tonumber(capacityStr:gsub("[%s,]", "")) or 0
 
             -- Calculate average EU/t over 20 seconds
             local history = panelDataHistory[panelName]
@@ -79,30 +93,30 @@ local function sendData()
             if history then
                 local deltaTime = currentTime - history.lastUpdateTime
                 if deltaTime >= 20 then
-                    local deltaEnergy = history.lastEnergy - energy
+                    local deltaEnergy = history.lastEnergy - energyNum
                     averageEUT = deltaEnergy / deltaTime / 20  -- EU/t (20 ticks per second)
                     -- Update history
                     history.lastUpdateTime = currentTime
-                    history.lastEnergy = energy
+                    history.lastEnergy = energyNum
                 end
             else
                 -- Initialize history
                 panelDataHistory[panelName] = {
                     lastUpdateTime = currentTime,
-                    lastEnergy = energy
+                    lastEnergy = energyNum
                 }
             end
 
             -- Format energy and capacity with units
-            local formattedEnergy = formatNumber(energy)
-            local formattedCapacity = formatNumber(capacity)
+            local formattedEnergy = formatNumber(energyNum)
+            local formattedCapacity = formatNumber(capacityNum)
 
             -- Prepare data to send
             table.insert(panelDataList, {
                 name = panelName,
                 title = title,
-                energy = energy,
-                capacity = capacity,
+                energy = energyNum,
+                capacity = capacityNum,
                 averageEUT = averageEUT,
                 formattedEnergy = formattedEnergy,
                 formattedCapacity = formattedCapacity
@@ -138,9 +152,9 @@ local function main()
     end
 
     print("Found Panels:")
-    for _, panelName in ipairs(panelPeripherals) do
-        print("- " .. panelName)
-    end
+        for _, panelName in ipairs(panelPeripherals) do
+            print("- " .. panelName)
+        end
 
     -- Send data periodically
     while true do

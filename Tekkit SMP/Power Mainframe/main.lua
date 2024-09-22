@@ -76,11 +76,17 @@ local function displayData()
             monitor.write("Usage: Calculating...")
         end
         y = y + 2  -- Add space between panels
+
+        -- If we've reached the bottom of the screen, start a new column
+        if y > h - 2 then
+            y = 3
+            monitor.setCursorPos(w / 2, 1)
+        end
     end
 
     -- If there are no panels, display a message
-    if y == 3 then
-        monitor.setCursorPos(1, y)
+    if next(panelDataList) == nil then
+        monitor.setCursorPos(1, 3)
         monitor.write("No panel data received yet.")
     end
 end
