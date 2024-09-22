@@ -18,14 +18,12 @@ local mainframeID = nil                -- Replace with the mainframe's Rednet ID
 -- Default capacity for PESUs (adjust as necessary or retrieve dynamically if available)
 local defaultPESUCapacity = 1000000000    -- Example: 1,000,000,000 EU
 
--- Ensure the wireless modem peripheral is available
-local wirelessModem = peripheral.wrap(wirelessModemSide)
-if not wirelessModem then
+-- Open Rednet on the wireless modem side
+if not peripheral.isPresent(wirelessModemSide) then
     print("Error: No wireless modem found on side '" .. wirelessModemSide .. "'. Please attach a wireless modem.")
     return
 end
 
--- Open the Rednet connection on the specified wireless modem side
 rednet.open(wirelessModemSide)
 print("Wireless Rednet initialized on side '" .. wirelessModemSide .. "'.")
 
@@ -121,37 +119,38 @@ local function collectAllData()
 
     -- Iterate through each peripheral and process accordingly
     for _, peripheralName in ipairs(peripheralNames) do
-        -- Check if the peripheral is connected via the wired modem side
-        -- Assuming peripherals connected via "back" are named with the "back" prefix or similar
-        -- Adjust the condition based on your naming conventions
-        if string.sub(peripheralName, 1, #wiredModemSide) == wiredModemSide then
-            local peripheralObj = peripheral.wrap(peripheralName)
-            if peripheralObj then
-                -- Determine the type of peripheral
-                local isPESU = peripheralObj.EUOutput and peripheralObj.EUStored
-                local isAIP = peripheralObj.getCardData and type(peripheralObj.getCardData) == "function"
+        -- Skip the wireless modem
+        if peripheralName == wirelessModemSide then
+            goto continue
+        end
 
-                if isPESU then
-                    -- Collect PESU data
-                    local pesuData = collectPESUData(peripheralObj, peripheralName)
-                    for _, data in ipairs(pesuData) do
-                        table.insert(pesuDataList, data)
-                    end
-                elseif isAIP then
-                    -- Collect Panel data
-                    local panelData = collectPanelData(peripheralObj, peripheralName)
-                    for _, data in ipairs(panelData) do
-                        table.insert(panelDataList, data)
-                    end
-                else
-                    -- Peripheral is neither PESU nor AIP
-                    -- Optionally, handle other peripheral types or ignore
-                    -- print("Info: Peripheral '" .. peripheralName .. "' is neither PESU nor AIP.")
+        local peripheralObj = peripheral.wrap(peripheralName)
+        if peripheralObj then
+            -- Determine the type of peripheral
+            local isPESU = peripheralObj.EUOutput and peripheralObj.EUStored
+            local isAIP = peripheralObj.getCardData and type(peripheralObj.getCardData) == "function"
+
+            if isPESU then
+                -- Collect PESU data
+                local pesuData = collectPESUData(peripheralObj, peripheralName)
+                for _, data in ipairs(pesuData) do
+                    table.insert(pesuDataList, data)
+                end
+            elseif isAIP then
+                -- Collect Panel data
+                local panelData = collectPanelData(peripheralObj, peripheralName)
+                for _, data in ipairs(panelData) do
+                    table.insert(panelDataList, data)
                 end
             else
-                print("Warning: Failed to wrap peripheral '" .. peripheralName .. "'.")
+                -- Peripheral is neither PESU nor AIP; ignore or handle accordingly
+                -- print("Info: Peripheral '" .. peripheralName .. "' is neither PESU nor AIP.")
             end
+        else
+            print("Warning: Failed to wrap peripheral '" .. peripheralName .. "'.")
         end
+
+        ::continue::
     end
 
     return pesuDataList, panelDataList
@@ -161,6 +160,17 @@ end
 while true do
     -- Collect data from all connected peripherals
     local pesuDataList, panelDataList = collectAllData()
+
+    -- Debugging: Print collected data
+    print("Collected PESU Data:")
+    for _, pesu in ipairs(pesuDataList) do
+        print(pesu.title, pesu.energy, pesu.capacity)
+    end
+
+    print("Collected Panel Data:")
+    for _, panel in ipairs(panelDataList) do
+        print(panel.title, panel.energy, panel.capacity)
+    end
 
     -- Construct the message to send
     local message = {
