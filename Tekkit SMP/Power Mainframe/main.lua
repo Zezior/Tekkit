@@ -266,13 +266,13 @@ local function handleTouch(x, y)
             displayCurrentPage()
         elseif x >= 12 and x <= 21 then
             currentPage = "pesu"
-            displayCurrentPage()
+            displayPESUListPage()
         elseif x >= 23 and x <= 37 then
             currentPage = "panel"
-            displayCurrentPage()
+            displayPanelDataPage()
         elseif x >= 39 and x <= 58 then
             currentPage = "messaging"
-            displayCurrentPage()
+            displayMessagingReactorPage()
         end
     end
 end
