@@ -42,9 +42,9 @@ end
 
 -- Function to set color based on percentage
 local function setColorBasedOnPercentage(percentage)
-    if percentage >= 0.90 then
+    if percentage >= 90 then
         monitor.setTextColor(colors.green)
-    elseif percentage >= 0.50 then
+    elseif percentage >= 50 then
         monitor.setTextColor(colors.yellow)
     else
         monitor.setTextColor(colors.red)
@@ -138,10 +138,10 @@ local function displayPESUListPage()
     for _, panel in pairs(panelDataList) do
         if y > 16 then break end  -- Prevent writing beyond the monitor
         -- Calculate fill percentage
-        local fillPercent = panel.capacity > 0 and (panel.energy / panel.capacity) * 100 or 0
+        local fillPercent = panel.fillPercent
 
         -- Set color based on fill percentage
-        setColorBasedOnPercentage(fillPercent / 100)
+        setColorBasedOnPercentage(fillPercent)
 
         -- Write PESU info
         monitor.setCursorPos(1, y)
@@ -176,10 +176,10 @@ local function displayPanelDataPage()
     for _, panel in pairs(panelDataList) do
         if y > 16 then break end  -- Prevent writing beyond the monitor
         -- Calculate fill percentage
-        local fillPercent = panel.capacity > 0 and (panel.energy / panel.capacity) * 100 or 0
+        local fillPercent = panel.fillPercent
 
         -- Set color based on fill percentage
-        setColorBasedOnPercentage(fillPercent / 100)
+        setColorBasedOnPercentage(fillPercent)
 
         -- Write Panel info
         monitor.setCursorPos(1, y)
