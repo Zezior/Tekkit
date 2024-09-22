@@ -2,14 +2,28 @@
 
 -- Configuration
 local powerMainframeID = 4644  -- Replace with your actual mainframe computer ID
-local modemSide = "top"        -- Adjust based on your setup
 
--- Open Rednet
-if not peripheral.isPresent(modemSide) then
-    print("Error: No modem found on side '" .. modemSide .. "'. Please attach a modem.")
+-- Function to auto-detect available modems
+local function autoDetectModem(preferredSides)
+    for _, side in ipairs(preferredSides) do
+        if peripheral.isPresent(side) and peripheral.getType(side) == "modem" then
+            return side
+        end
+    end
+    return nil
+end
+
+-- Preferred order: wired first, then wireless
+local preferredModemSides = {"back", "top", "left", "right", "front", "bottom"}
+local modemSide = autoDetectModem(preferredModemSides)
+
+if not modemSide then
+    print("Error: No modem found. Please attach a modem.")
     return
 end
+
 rednet.open(modemSide)
+print("Rednet opened on side: " .. modemSide)
 
 -- Function to scan and return all info_panel_advanced peripherals
 local function getInfoPanels()
@@ -53,7 +67,7 @@ local function getPanelEnergyData(panels)
             if line:find("^Title:") then
                 title = line:match("^Title:%s*(.*)")
             elseif line:find("^[Ee]nergy:") then
-                energyStr = line:match("^[Ee]nergy:%s*([%d%s,%.]+)")
+                energyStr = line:match("^[Ee]nergy:%s*([%d%s,EU]+)")
             end
         end
 
