@@ -1,171 +1,105 @@
--- pesu_sender.lua
+-- power_sender.lua
+
+-- Description:
+-- This script collects power data from PESU cards using the `getCardData` function
+-- and sends the processed data to the Power Mainframe via wireless Rednet.
 
 -- Configuration
-local powerMainframeID = 4644  -- Replace with your actual mainframe computer ID
+local modemSide = "back"        -- Side where the wireless modem is attached (e.g., "back")
+local refreshInterval = 2       -- Time in seconds between data sends
+local protocol = "pesu_data"    -- Protocol name for communication
 
--- Function to auto-detect available modems
-local function autoDetectModem(preferredSides)
-    for _, side in ipairs(preferredSides) do
-        if peripheral.isPresent(side) and peripheral.getType(side) == "modem" then
-            return side
-        end
-    end
-    return nil
-end
+-- Optional: Define mainframe ID if sending to a specific computer
+-- If you want to broadcast to all listening computers, you can omit the mainframeID or set it to nil
+local mainframeID = nil          -- Replace with the mainframe's Rednet ID if needed (e.g., 5)
 
--- Preferred order: wired first, then wireless
-local preferredModemSides = {"back", "top", "left", "right", "front", "bottom"}
-local modemSide = autoDetectModem(preferredModemSides)
+-- Default capacity for PESUs (adjust as necessary)
+local defaultCapacity = 1000000000  -- Example: 1,000,000,000 EU
 
-if not modemSide then
-    print("Error: No modem found. Please attach a modem.")
+-- Ensure the modem peripheral is available
+local modem = peripheral.wrap(modemSide)
+if not modem then
+    print("Error: No modem found on side '" .. modemSide .. "'. Please attach a wireless modem.")
     return
 end
 
+-- Open the Rednet connection on the specified modem side
 rednet.open(modemSide)
-print("Rednet opened on side: " .. modemSide)
+print("Rednet initialized on side '" .. modemSide .. "'.")
 
--- Function to scan and return all info_panel_advanced peripherals
-local function getInfoPanels()
-    local panels = {}
-    for _, name in ipairs(peripheral.getNames()) do
-        if peripheral.getType(name) == "info_panel_advanced" then
-            local panel = peripheral.wrap(name)
-            if panel then
-                table.insert(panels, {name = name, panel = panel})
-                print("Detected Advanced Information Panel: " .. name)
-            else
-                print("Error: Unable to wrap peripheral '" .. name .. "'.")
-            end
-        end
-    end
-    return panels
-end
-
--- Function to collect energy data from panels
-local function getPanelEnergyData(panels)
-    local energyData = {}
-    for _, panelInfo in ipairs(panels) do
-        local name = panelInfo.name
-        local panel = panelInfo.panel
-
-        -- Retrieve card data
-        local cardData = panel.getCardDataRaw()
-
-        -- Debug: Print the raw card data
-        print("Raw Card Data for panel '" .. name .. "':")
-        for _, line in ipairs(cardData) do
-            print("  " .. line)
-        end
-
-        -- Initialize variables
-        local title = "Unknown"
-        local energyStr = nil
-
-        -- Parse card data
-        for _, line in ipairs(cardData) do
-            if line:find("^Title:") then
-                title = line:match("^Title:%s*(.*)")
-            elseif line:find("^[Ee]nergy:") then
-                energyStr = line:match("^[Ee]nergy:%s*([%d%s,EU]+)")
-            end
-        end
-
-        -- Debug: Print parsed strings
-        print("Parsed Title: '" .. tostring(title) .. "'")
-        print("Parsed Energy String: '" .. tostring(energyStr) .. "'")
-
-        -- Validate and convert energy
-        if energyStr then
-            -- Remove spaces, commas, and 'EU', then convert to number
-            local energyNum = tonumber(energyStr:gsub("[%s,EU]", "")) or 0
-
-            -- Debug: Print numeric energy
-            print(string.format("Numeric Energy: %d EU", energyNum))
-
-            -- Store data
-            table.insert(energyData, {
-                title = title,
-                energy = energyNum
-            })
+-- Function to parse the energy string and extract the numerical value
+local function parseEnergy(energyStr)
+    -- Example energyStr format: "2: Energy: 217 000 000 EU"
+    local numStr = string.match(energyStr, "Energy:%s*([%d%s]+)")
+    if numStr then
+        -- Remove all spaces to convert to a continuous number
+        numStr = string.gsub(numStr, "%s+", "")
+        local energy = tonumber(numStr)
+        if energy then
+            return energy
         else
-            print("Warning: Missing Energy data in panel '" .. name .. "'.")
+            print("Warning: Unable to convert energy string to number: '" .. energyStr .. "'")
+            return 0
         end
+    else
+        print("Warning: Energy string format unexpected: '" .. energyStr .. "'")
+        return 0
     end
-    return energyData
 end
 
--- Function to calculate Active Usage
-local function calculateActiveUsage(initialData, finalData)
-    local panelDataList = {}
-    for _, initial in ipairs(initialData) do
-        for _, final in ipairs(finalData) do
-            if initial.title == final.title then
-                local deltaEnergy = initial.energy - final.energy
-                -- Assuming deltaEnergy positive means energy was consumed
-                local activeUsage = deltaEnergy / 400  -- 400 ticks = 20 seconds
+-- Main loop to collect and send PESU data
+while true do
+    -- Retrieve the list of PESU cards
+    local success, cardDataList = pcall(getCardData)
+    if not success then
+        print("Error: Failed to retrieve card data. Ensure that 'getCardData' is defined and functioning.")
+    elseif type(cardDataList) ~= "table" then
+        print("Error: 'getCardData' did not return a table. Received type: " .. type(cardDataList))
+    else
+        -- Prepare the PESU data list to send
+        local pesuDataList = {}
 
-                -- Prevent negative usage (if energy increased)
-                if activeUsage < 0 then
-                    activeUsage = 0
-                end
+        for _, card in ipairs(cardDataList) do
+            -- Ensure each card has at least two data points: name and energy
+            if type(card) == "table" and #card >= 2 then
+                local name = tostring(card[1])
+                local energyStr = tostring(card[2])
+                local energy = parseEnergy(energyStr)
 
-                table.insert(panelDataList, {
-                    title = initial.title,
-                    energy = final.energy,
-                    activeUsage = activeUsage
+                -- You can customize how capacity is determined.
+                -- For now, we use a default capacity. Modify as needed.
+                local capacity = defaultCapacity
+
+                table.insert(pesuDataList, {
+                    title = name,
+                    energy = energy,
+                    capacity = capacity,
                 })
-
-                print(string.format("Panel '%s' Active Usage: %.2f EU/t", initial.title, activeUsage))
+            else
+                print("Warning: Invalid card data format. Each card should be a table with at least two elements.")
             end
         end
-    end
-    return panelDataList
-end
 
--- Main Loop
-local function main()
-    local panels = getInfoPanels()
-    if #panels == 0 then
-        print("No Advanced Information Panels found. Ensure they are connected properly.")
-        return
-    end
+        -- Construct the message to send
+        local message = {
+            command = "pesu_data",
+            pesuDataList = pesuDataList,
+            -- If you have panel data, you can include it here as well
+            -- panelDataList = panelDataList,  -- Add if applicable
+        }
 
-    -- Collect initial energy data
-    local initialEnergyData = getPanelEnergyData(panels)
-    print("Initial energy data collected.")
-
-    while true do
-        -- Wait for 20 seconds (400 ticks)
-        print("Waiting for 20 seconds to calculate active usage...")
-        sleep(20)  -- Sleep for 20 seconds
-
-        -- Collect final energy data
-        local finalEnergyData = getPanelEnergyData(panels)
-        print("Final energy data collected.")
-
-        -- Calculate active usage
-        local panelDataList = calculateActiveUsage(initialEnergyData, finalEnergyData)
-
-        -- Send data to mainframe
-        if #panelDataList > 0 then
-            local data = {
-                command = "pesu_data",  -- Updated to match mainframe's expectation
-                senderID = os.getComputerID(),
-                pesuDataList = panelDataList,  -- Renamed for consistency
-                timestamp = os.time()
-            }
-
-            -- Send data to mainframe
-            rednet.send(powerMainframeID, data, "pesu_data")
-            print("Data sent to power mainframe.")
-
-            -- Update initial data for next calculation
-            initialEnergyData = finalEnergyData
+        -- Send the message via Rednet
+        if mainframeID then
+            -- Send to a specific mainframe ID
+            rednet.send(mainframeID, message, protocol)
+            print("Sent PESU data to Mainframe ID " .. mainframeID)
         else
-            print("No active usage data to send.")
+            -- Broadcast to all listening computers
+            rednet.broadcast(message, protocol)
+            print("Broadcasted PESU data to all listening mainframes.")
         end
     end
-end
 
-main()
+    -- Wait for the next refresh interval
+    sleep(refreshInterval)
+end
