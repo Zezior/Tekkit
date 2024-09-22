@@ -15,7 +15,7 @@ local function downloadFile(filePath)
     local url = githubUrl .. filePath
     print("Downloading: " .. url)  -- This will help debug the full URL
     local success, err = pcall(function()
-        shell.run("wget", "-f", url, filePath)
+        shell.run("wget", "-f", url .. filePath)
     end)
 
     if not success then
