@@ -19,11 +19,11 @@ local panelPeripherals = {}
 local function scanPeripherals()
     local peripherals = peripheral.getNames()
     for _, name in ipairs(peripherals) do
-        local type = peripheral.getType(name)
-        if type == "ic2:pesu" then
+        local pType = peripheral.getType(name)
+        if pType == "ic2:pesu" then
             table.insert(pesuPeripherals, name)
             print("Detected PESU: " .. name)
-        elseif type == "info_panel_advanced" then  -- Adjust if your panel type is different
+        elseif pType == "info_panel_advanced" then  -- Adjust if your panel type is different
             table.insert(panelPeripherals, name)
             print("Detected Advanced Information Panel: " .. name)
         end
@@ -52,6 +52,8 @@ local panelDataHistory = {}  -- Indexed by panelName
 
 -- Function to send data to the power mainframe
 local function sendData()
+    local currentTime = os.time()
+
     -- Process PESU data
     local pesuDataList = {}
     for _, pesuName in ipairs(pesuPeripherals) do
@@ -80,39 +82,50 @@ local function sendData()
 
     -- Process Panel data
     local panelDataList = {}
-    local currentTime = os.time()
     for _, panelName in ipairs(panelPeripherals) do
         local panel = peripheral.wrap(panelName)
         if panel then
             -- Use getCardDataRaw to get panel data
             if type(panel.getCardDataRaw) ~= "function" then
                 print("Error: 'getCardDataRaw' function not found for Panel '" .. panelName .. "'. Skipping this panel.")
-                -- Skip to next panel
             else
                 local cardData = panel.getCardDataRaw()
 
                 -- Debug: Print the raw card data
                 print("Raw Card Data for panel '" .. panelName .. "':")
-                for key, value in pairs(cardData) do
-                    print("  " .. key .. ": " .. tostring(value))
+                for _, line in ipairs(cardData) do
+                    print("  " .. line)
                 end
 
-                -- Extract required data
-                local title = cardData.title or "Unknown"
-                local energyStr = tostring(cardData.energy)
-                local capacityStr = tostring(cardData.capacity)
+                -- Initialize variables
+                local title = "Unknown"
+                local energyNum = 0
+                local capacityNum = 0
 
-                -- Debug: Print energy and capacity strings
-                print("Parsed Energy String: '" .. energyStr .. "'")
-                print("Parsed Capacity String: '" .. capacityStr .. "'")
-
-                -- Convert strings to numbers by removing spaces and commas
-                local energyNum = tonumber(energyStr:gsub("[%s,]", "")) or 0
-                local capacityNum = tonumber(capacityStr:gsub("[%s,]", "")) or 0
-
-                -- Debug: Print numeric values
-                print("Numeric Energy: " .. energyNum)
-                print("Numeric Capacity: " .. capacityNum)
+                -- Extract required data by parsing lines
+                for _, line in ipairs(cardData) do
+                    if line:find("^Title:") then
+                        title = line:match("^Title:%s*(.*)")
+                    elseif line:find("^[Ee]nergy:") then
+                        local energyStr = line:match("^[Ee]nergy:%s*([%d%s,]+)")
+                        if energyStr then
+                            print("Parsed Energy String: '" .. energyStr .. "'")
+                            energyNum = tonumber(energyStr:gsub("[%s,]", "")) or 0
+                            print("Numeric Energy: " .. energyNum)
+                        else
+                            print("Warning: Energy string not found in line: " .. line)
+                        end
+                    elseif line:find("^[Cc]apacity:") then
+                        local capacityStr = line:match("^[Cc]apacity:%s*([%d%s,]+)")
+                        if capacityStr then
+                            print("Parsed Capacity String: '" .. capacityStr .. "'")
+                            capacityNum = tonumber(capacityStr:gsub("[%s,]", "")) or 0
+                            print("Numeric Capacity: " .. capacityNum)
+                        else
+                            print("Warning: Capacity string not found in line: " .. line)
+                        end
+                    end
+                end
 
                 -- Calculate average EU/t over 20 seconds
                 local history = panelDataHistory[panelName]
@@ -127,6 +140,8 @@ local function sendData()
                         panelDataHistory[panelName].lastUpdateTime = currentTime
                         panelDataHistory[panelName].lastEnergy = energyNum
                         print("Calculated average EU/t for panel '" .. panelName .. "': " .. averageEUT)
+                    else
+                        print("Not enough time elapsed for panel '" .. panelName .. "' to calculate average EU/t. Delta Time: " .. deltaTime)
                     end
                 else
                     -- Initialize history
