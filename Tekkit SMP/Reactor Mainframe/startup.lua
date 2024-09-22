@@ -1,6 +1,6 @@
 -- startup.lua
 
-local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/refs/heads/main/Tekkit%20SMP/Reactor%20Mainframe/"
+local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Reactor%20Mainframe/"
 
 local filesToUpdate = {
     "Reactors/main.lua",
@@ -11,24 +11,64 @@ local filesToUpdate = {
     "Reactors/ids.lua"
 }
 
+local function printUsage()
+    print("Usage:")
+    print("wget <url> <filename>")
+end
+
+local function get(sUrl)
+    write("Connecting to " .. sUrl .. "... ")
+
+    -- Check if the URL is valid
+    local ok, err = http.checkURL(sUrl)
+    if not ok then
+        print("Failed.")
+        if err then
+            printError(err)
+        end
+        return nil
+    end
+
+    -- Attempt to download the file
+    local response = http.get(sUrl, nil, true)
+    if not response then
+        print("Failed.")
+        return nil
+    end
+
+    print("Success.")
+    local sResponse = response.readAll()
+    response.close()
+    return sResponse
+end
+
 local function downloadFile(filePath)
     local url = githubUrl .. filePath
-    print("Downloading: " .. url)  -- This will help debug the full URL
-    local success, err = pcall(function()
-        shell.run("wget", "-f", url .. filePath)
-    end)
+    print("Downloading: " .. url)
 
-    if not success then
-        print("Failed to download " .. filePath .. ": " .. err)
-        return false
-    else
+    -- Use the get function to download the file content
+    local res = get(url)
+    if res then
+        local file = fs.open(filePath, "wb")
+        file.write(res)
+        file.close()
         print("Updated " .. filePath)
         return true
+    else
+        print("Failed to download " .. filePath)
+        return false
     end
 end
 
 local function fileExists(filePath)
     return fs.exists(filePath)
+end
+
+-- Ensure HTTP API is enabled
+if not http then
+    printError("wget requires http API")
+    printError("Set http_enable to true in ComputerCraft.cfg")
+    return
 end
 
 -- Update all files
