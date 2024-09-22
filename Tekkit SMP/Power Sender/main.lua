@@ -84,10 +84,10 @@ local function getPanelEnergyData(panels)
             print(string.format("Numeric Energy: %d EU", energyNum))
 
             -- Store data
-            energyData[name] = {
+            table.insert(energyData, {
                 title = title,
                 energy = energyNum
-            }
+            })
         else
             print("Warning: Missing Energy data in panel '" .. name .. "'.")
         end
@@ -98,26 +98,26 @@ end
 -- Function to calculate Active Usage
 local function calculateActiveUsage(initialData, finalData)
     local panelDataList = {}
-    for name, initial in pairs(initialData) do
-        if finalData[name] then
-            local deltaEnergy = initial.energy - finalData[name].energy
-            -- Assuming deltaEnergy positive means energy was consumed
-            local activeUsage = deltaEnergy / 400  -- 400 ticks = 20 seconds
+    for _, initial in ipairs(initialData) do
+        for _, final in ipairs(finalData) do
+            if initial.title == final.title then
+                local deltaEnergy = initial.energy - final.energy
+                -- Assuming deltaEnergy positive means energy was consumed
+                local activeUsage = deltaEnergy / 400  -- 400 ticks = 20 seconds
 
-            -- Prevent negative usage (if energy increased)
-            if activeUsage < 0 then
-                activeUsage = 0
+                -- Prevent negative usage (if energy increased)
+                if activeUsage < 0 then
+                    activeUsage = 0
+                end
+
+                table.insert(panelDataList, {
+                    title = initial.title,
+                    energy = final.energy,
+                    activeUsage = activeUsage
+                })
+
+                print(string.format("Panel '%s' Active Usage: %.2f EU/t", initial.title, activeUsage))
             end
-
-            table.insert(panelDataList, {
-                title = initial.title,
-                energy = finalData[name].energy,
-                activeUsage = activeUsage
-            })
-
-            print(string.format("Panel '%s' Active Usage: %.2f EU/t", initial.title, activeUsage))
-        else
-            print(string.format("Warning: Panel '%s' not found in final energy data.", initial.title))
         end
     end
     return panelDataList
@@ -150,9 +150,9 @@ local function main()
         -- Send data to mainframe
         if #panelDataList > 0 then
             local data = {
-                command = "panel_data",
+                command = "pesu_data",  -- Updated to match mainframe's expectation
                 senderID = os.getComputerID(),
-                panels = panelDataList,
+                pesuDataList = panelDataList,  -- Renamed for consistency
                 timestamp = os.time()
             }
 

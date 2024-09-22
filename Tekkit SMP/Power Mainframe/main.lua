@@ -1,10 +1,13 @@
 -- power_mainframe.lua
 
+-- Configuration
+local monitorSide = "right"     -- Adjust based on your setup
+
 -- Open the ender modem on the "top" side
 rednet.open("top")
 
 -- Variables for monitor and button handling
-local monitor = peripheral.wrap("right")
+local monitor = peripheral.wrap(monitorSide)
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
 
 -- Clear the monitor fully on startup
@@ -37,7 +40,9 @@ local lastUpdateTime = os.clock()
 
 -- Function to format large numbers
 local function formatNumber(num)
-    if num >= 1e9 then
+    if num >= 1e12 then
+        return string.format("%.2ftil", num / 1e12)
+    elseif num >= 1e9 then
         return string.format("%.2fbil", num / 1e9)
     elseif num >= 1e6 then
         return string.format("%.2fmil", num / 1e6)
@@ -77,7 +82,10 @@ local function drawButton(label, x, y, width, height, color)
         monitor.setCursorPos(x, y + i)
         monitor.write(string.rep(" ", width))
     end
-    monitor.setCursorPos(x + math.floor((width - #label) / 2), y + math.floor(height / 2))
+    -- Center the label
+    local labelX = x + math.floor((width - #label) / 2)
+    local labelY = y + math.floor(height / 2)
+    monitor.setCursorPos(labelX, labelY)
     monitor.write(label)
     monitor.setBackgroundColor(colors.black)
 end
@@ -143,13 +151,13 @@ local function processPESUData()
         -- Process PESU data
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
-                totalStored = totalStored + pesuData.stored
+                totalStored = totalStored + pesuData.energy  -- Assuming 'energy' is stored EU
                 totalCapacity = totalCapacity + pesuData.capacity
                 table.insert(pesuList, {
-                    stored = pesuData.stored,
+                    stored = pesuData.energy,  -- Aligning with sender's 'energy' field
                     capacity = pesuData.capacity,
                     senderID = senderID,
-                    pesuName = pesuData.name
+                    pesuName = pesuData.title  -- Assuming 'title' is the name
                 })
             end
         end
@@ -158,32 +166,15 @@ local function processPESUData()
         if data.panelDataList then
             for _, panelData in ipairs(data.panelDataList) do
                 -- Use senderID and panelName as unique identifier
-                local panelID = senderID .. "_" .. panelData.name
+                local panelID = senderID .. "_" .. panelData.title
 
                 -- Get existing data or initialize
                 local existingData = panelDataList[panelID] or {}
 
                 -- Update the panel data
                 existingData.title = panelData.title or existingData.title
-                existingData.capacity = panelData.capacity
                 existingData.energy = panelData.energy
-
-                -- Calculate average EU/t
-                if existingData.lastUpdateTime then
-                    local deltaTime = currentTime - existingData.lastUpdateTime
-                    if deltaTime >= 20 then
-                        local deltaEnergy = existingData.lastEnergy - existingData.energy
-                        local averageEUT = (deltaEnergy / deltaTime) / 20  -- EU/t
-                        existingData.averageEUT = averageEUT
-                        existingData.lastUpdateTime = currentTime
-                        existingData.lastEnergy = existingData.energy
-                    end
-                else
-                    -- First time receiving data
-                    existingData.lastUpdateTime = currentTime
-                    existingData.lastEnergy = existingData.energy
-                    existingData.averageEUT = nil  -- Cannot calculate yet
-                end
+                existingData.averageEUT = panelData.activeUsage
 
                 -- Update the panel data in the list
                 panelDataList[panelID] = existingData
@@ -192,7 +183,6 @@ local function processPESUData()
                 print("Panel Data for", panelID)
                 print("Title:", existingData.title)
                 print("Energy:", existingData.energy)
-                print("Capacity:", existingData.capacity)
                 print("Average EU/t:", existingData.averageEUT or "Calculating...")
             end
         end
@@ -250,19 +240,21 @@ local function displayPESUPage(pesuData, pageIndex)
 
     for idx, data in ipairs(pesuData) do
         local column = math.ceil(idx / pesusPerColumn)
+        if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
         local y = ((idx - 1) % pesusPerColumn) + 3
 
         local percentage = data.stored / data.capacity
         setColorBasedOnPercentage(percentage)
         monitor.setCursorPos(x, y)
-        monitor.write(string.format("PESU %d: %s", ((pageIndex - 1) * pesusPerPage) + idx, formatPercentage(data.stored, data.capacity)))
+        monitor.write(string.format("%s: %s", data.pesuName, formatPercentage(data.stored, data.capacity)))
     end
 end
 
 -- Function to center a text on the monitor screen
 local function centerText(text, y)
     local x = math.floor((w - #text) / 2) + 1
+    if x < 1 then x = 1 end
     monitor.setCursorPos(x, y)
     monitor.write(text)
 end
@@ -279,7 +271,7 @@ local function displayHomePage()
         table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, pesuNum = idx})
     end
 
-    -- Sort PESUs by percentage drained
+    -- Sort PESUs by percentage drained (ascending)
     table.sort(top10, function(a, b)
         local aPercent = (a.stored / a.capacity)
         local bPercent = (b.stored / b.capacity)
@@ -378,16 +370,18 @@ local function main()
             end
         end,
         function()  -- Handle Incoming PESU Data
-            while true do
-                local event, senderID, message, protocol = os.pullEvent("rednet_message")
-                if protocol == "pesu_data" then
-                    if type(message) == "table" and message.command == "pesu_data" then
-                        -- Store the PESU data from the sender
-                        pesuDataFromSenders[senderID] = message
-                        displayNeedsRefresh = true  -- Update display
+                while true do
+                    local event, senderID, message, protocol = os.pullEvent("rednet_message")
+                    if protocol == "pesu_data" then
+                        if type(message) == "table" and message.command == "pesu_data" then
+                            -- Store the PESU data from the sender
+                            pesuDataFromSenders[senderID] = message
+                            displayNeedsRefresh = true  -- Update display
+                        else
+                            print("Warning: Received malformed data from Sender ID: " .. senderID)
+                        end
                     end
                 end
-            end
         end
     )
 end
