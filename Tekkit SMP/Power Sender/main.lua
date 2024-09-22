@@ -11,7 +11,7 @@ if not peripheral.isPresent(modemSide) then
 end
 rednet.open(modemSide)
 
--- List of connected PESUs and Panels
+-- Lists of connected PESUs and Panels
 local pesuPeripherals = {}
 local panelPeripherals = {}
 
@@ -89,7 +89,7 @@ local function sendData()
             if type(panel.getCardDataRaw) == "function" then
                 cardData = panel.getCardDataRaw()
             else
-                print("Error: 'getCardDataRaw' function not found for Panel '" .. panelName .. "'.")
+                print("Error: 'getCardDataRaw' function not found for Panel '" .. panelName .. "'. Skipping this panel.")
                 goto continue_panel
             end
 
@@ -124,7 +124,7 @@ local function sendData()
                 local deltaTime = currentTime - history.lastUpdateTime
                 if deltaTime >= 20 then
                     local deltaEnergy = history.lastEnergy - energyNum
-                    averageEUT = (deltaEnergy) / deltaTime / 20  -- EU/t (20 ticks per second)
+                    averageEUT = deltaEnergy / deltaTime / 20  -- EU/t (20 ticks per second)
                     -- Update history
                     panelDataHistory[panelName].lastUpdateTime = currentTime
                     panelDataHistory[panelName].lastEnergy = energyNum

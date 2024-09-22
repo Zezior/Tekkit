@@ -39,28 +39,6 @@ local function formatNumber(num)
     end
 end
 
--- Function to process incoming data
-local function processData()
-    while true do
-        local event, senderID, message, protocol = os.pullEvent("rednet_message")
-        if protocol == "pesu_data" then
-            if type(message) == "table" and message.command == "pesu_data" then
-                -- Store the data
-                pesuDataFromSenders[senderID] = message
-
-                -- Process panel data
-                for _, panelData in ipairs(message.panelDataList) do
-                    local panelID = senderID .. "_" .. panelData.name
-                    panelDataList[panelID] = panelData
-                end
-
-                -- Update display
-                displayData()
-            end
-        end
-    end
-end
-
 -- Function to set color based on percentage
 local function setColorBasedOnPercentage(percentage)
     if percentage >= 0.90 then
@@ -84,9 +62,9 @@ local function displayData()
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.white)
     monitor.write("Power Service Stats")
-
+    
     local y = 3  -- Starting row for panel data
-
+    
     for _, panelData in pairs(panelDataList) do
         -- Display Title
         monitor.setCursorPos(1, y)
@@ -121,6 +99,28 @@ local function displayData()
     if next(panelDataList) == nil then
         monitor.setCursorPos(1, y)
         monitor.write("No panel data received yet.")
+    end
+end
+
+-- Function to process incoming data
+local function processData()
+    while true do
+        local event, senderID, message, protocol = os.pullEvent("rednet_message")
+        if protocol == "pesu_data" then
+            if type(message) == "table" and message.command == "pesu_data" then
+                -- Store the data
+                pesuDataFromSenders[senderID] = message
+
+                -- Process panel data
+                for _, panelData in ipairs(message.panelDataList) do
+                    local panelID = senderID .. "_" .. panelData.name
+                    panelDataList[panelID] = panelData
+                end
+
+                -- Update display
+                displayData()
+            end
+        end
     end
 end
 
