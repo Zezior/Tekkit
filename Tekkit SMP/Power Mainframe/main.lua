@@ -82,26 +82,17 @@ local function displayHomePage()
     monitor.setTextColor(colors.white)
     monitor.write("Power Service Home")
 
-    -- Calculate total energy and capacity
+    -- Calculate total energy
     local totalEnergy = 0
-    local totalCapacity = 0
     for _, panel in pairs(panelDataList) do
-        if panel.energy and panel.capacity then
+        if panel.energy then
             totalEnergy = totalEnergy + panel.energy
-            totalCapacity = totalCapacity + panel.capacity
         end
     end
-
-    -- Calculate overall fill percentage
-    local overallFill = totalCapacity > 0 and (totalEnergy / totalCapacity) * 100 or 0
 
     -- Display statistics
     monitor.setCursorPos(1, 3)
     monitor.write("Total Energy: " .. formatNumber(totalEnergy) .. " EU")
-    monitor.setCursorPos(1, 4)
-    monitor.write("Total Capacity: " .. formatNumber(totalCapacity) .. " EU")
-    monitor.setCursorPos(1, 5)
-    monitor.write(string.format("Overall Fill: %.2f%%", overallFill))
 
     -- Calculate and display active usage
     local totalActiveUsage = 0
@@ -114,18 +105,18 @@ local function displayHomePage()
     end
     if count > 0 then
         local averageActiveUsage = totalActiveUsage / count
-        monitor.setCursorPos(1, 6)
+        monitor.setCursorPos(1, 4)
         monitor.write(string.format("Active Usage: %.2f EU/t", averageActiveUsage))
     else
-        monitor.setCursorPos(1, 6)
+        monitor.setCursorPos(1, 4)
         monitor.write("Active Usage: Calculating...")
     end
 
     -- Draw Navigation Buttons
-    drawButton(1, 8, 10, 3, "Home")
-    drawButton(12, 8, 10, 3, "PESU List")
-    drawButton(23, 8, 15, 3, "Panel Data")
-    drawButton(39, 8, 20, 3, "Messaging Reactor")
+    drawButton(1, 6, 10, 3, "Home")
+    drawButton(12, 6, 10, 3, "PESU List")
+    drawButton(23, 6, 15, 3, "Panel Data")
+    drawButton(39, 6, 20, 3, "Messaging Reactor")
 end
 
 -- Function to display PESU List Page
@@ -139,18 +130,15 @@ local function displayPESUListPage()
 
     for _, panel in pairs(panelDataList) do
         if y > 16 then break end  -- Prevent writing beyond the monitor
-        if panel.title and panel.energy and panel.capacity then
-            -- Calculate fill percentage
-            local fillPercent = panel.fillPercent
-
-            -- Set color based on fill percentage
-            setColorBasedOnPercentage(fillPercent)
+        if panel.title and panel.energy then
+            -- Set color based on energy level (example logic)
+            setColorBasedOnPercentage(panel.energy / 1e6 * 100)  -- Adjust as needed
 
             -- Write PESU info
             monitor.setCursorPos(1, y)
             monitor.write(string.format("PESU: %s", panel.title))
             monitor.setCursorPos(1, y + 1)
-            monitor.write(string.format("Energy: %s / %s EU (%.2f%%)", formatNumber(panel.energy), formatNumber(panel.capacity), fillPercent))
+            monitor.write(string.format("Energy: %s EU", formatNumber(panel.energy)))
             y = y + 3
         else
             print("Warning: Incomplete data for a PESU. Skipping display.")
@@ -164,10 +152,10 @@ local function displayPESUListPage()
     end
 
     -- Draw Navigation Buttons
-    drawButton(1, 8, 10, 3, "Home")
-    drawButton(12, 8, 10, 3, "PESU List")
-    drawButton(23, 8, 15, 3, "Panel Data")
-    drawButton(39, 8, 20, 3, "Messaging Reactor")
+    drawButton(1, 6, 10, 3, "Home")
+    drawButton(12, 6, 10, 3, "PESU List")
+    drawButton(23, 6, 15, 3, "Panel Data")
+    drawButton(39, 6, 20, 3, "Messaging Reactor")
 end
 
 -- Function to display Panel Data Page
@@ -181,18 +169,15 @@ local function displayPanelDataPage()
 
     for _, panel in pairs(panelDataList) do
         if y > 16 then break end  -- Prevent writing beyond the monitor
-        if panel.title and panel.energy and panel.capacity and panel.activeUsage then
-            -- Calculate fill percentage
-            local fillPercent = panel.fillPercent
-
-            -- Set color based on fill percentage
-            setColorBasedOnPercentage(fillPercent)
+        if panel.title and panel.energy and panel.activeUsage then
+            -- Set color based on active usage (example logic)
+            setColorBasedOnPercentage(panel.activeUsage / 100 * 100)  -- Adjust as needed
 
             -- Write Panel info
             monitor.setCursorPos(1, y)
             monitor.write(string.format("Panel: %s", panel.title))
             monitor.setCursorPos(1, y + 1)
-            monitor.write(string.format("Energy: %s / %s EU (%.2f%%)", formatNumber(panel.energy), formatNumber(panel.capacity), fillPercent))
+            monitor.write(string.format("Energy: %s EU", formatNumber(panel.energy)))
             monitor.setCursorPos(1, y + 2)
             monitor.write(string.format("Active Usage: %.2f EU/t", panel.activeUsage))
             y = y + 4
@@ -208,10 +193,10 @@ local function displayPanelDataPage()
     end
 
     -- Draw Navigation Buttons
-    drawButton(1, 8, 10, 3, "Home")
-    drawButton(12, 8, 10, 3, "PESU List")
-    drawButton(23, 8, 15, 3, "Panel Data")
-    drawButton(39, 8, 20, 3, "Messaging Reactor")
+    drawButton(1, 6, 10, 3, "Home")
+    drawButton(12, 6, 10, 3, "PESU List")
+    drawButton(23, 6, 15, 3, "Panel Data")
+    drawButton(39, 6, 20, 3, "Messaging Reactor")
 end
 
 -- Function to display Messaging Reactor Mainframe Page
@@ -242,10 +227,10 @@ local function displayMessagingReactorPage()
     y = y + 1
 
     -- Draw Navigation Buttons
-    drawButton(1, 8, 10, 3, "Home")
-    drawButton(12, 8, 10, 3, "PESU List")
-    drawButton(23, 8, 15, 3, "Panel Data")
-    drawButton(39, 8, 20, 3, "Messaging Reactor")
+    drawButton(1, 6, 10, 3, "Home")
+    drawButton(12, 6, 10, 3, "PESU List")
+    drawButton(23, 6, 15, 3, "Panel Data")
+    drawButton(39, 6, 20, 3, "Messaging Reactor")
 end
 
 -- Function to display the current page
@@ -266,7 +251,7 @@ end
 -- Function to handle monitor touch events for buttons
 local function handleTouch(x, y)
     -- Define button regions based on drawButton positions
-    if y >= 8 and y <= 10 then
+    if y >= 6 and y <= 8 then
         if x >= 1 and x <= 10 then
             currentPage = "home"
             displayCurrentPage()

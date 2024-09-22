@@ -28,19 +28,6 @@ local function getInfoPanels()
     return panels
 end
 
--- Function to format large numbers with units
-local function formatNumber(num)
-    if num >= 1e9 then
-        return string.format("%.2fbil", num / 1e9)
-    elseif num >= 1e6 then
-        return string.format("%.2fmil", num / 1e6)
-    elseif num >= 1e3 then
-        return string.format("%.2fk", num / 1e3)
-    else
-        return tostring(num)
-    end
-end
-
 -- Function to collect energy data from panels
 local function getPanelEnergyData(panels)
     local energyData = {}
@@ -60,7 +47,6 @@ local function getPanelEnergyData(panels)
         -- Initialize variables
         local title = "Unknown"
         local energyStr = nil
-        local capacityStr = nil
 
         -- Parse card data
         for _, line in ipairs(cardData) do
@@ -68,41 +54,59 @@ local function getPanelEnergyData(panels)
                 title = line:match("^Title:%s*(.*)")
             elseif line:find("^[Ee]nergy:") then
                 energyStr = line:match("^[Ee]nergy:%s*([%d%s,%.]+)")
-            elseif line:find("^[Cc]apacity:") then
-                capacityStr = line:match("^[Cc]apacity:%s*([%d%s,%.]+)")
             end
         end
 
         -- Debug: Print parsed strings
+        print("Parsed Title: '" .. tostring(title) .. "'")
         print("Parsed Energy String: '" .. tostring(energyStr) .. "'")
-        print("Parsed Capacity String: '" .. tostring(capacityStr) .. "'")
 
-        -- Validate and convert energy and capacity
-        if energyStr and capacityStr then
+        -- Validate and convert energy
+        if energyStr then
             -- Remove spaces, commas, and 'EU', then convert to number
             local energyNum = tonumber(energyStr:gsub("[%s,EU]", "")) or 0
-            local capacityNum = tonumber(capacityStr:gsub("[%s,EU]", "")) or 0
 
-            -- Calculate fill percentage
-            local fillPercent = capacityNum > 0 and (energyNum / capacityNum) * 100 or 0
-
-            -- Debug: Print numeric values
+            -- Debug: Print numeric energy
             print(string.format("Numeric Energy: %d EU", energyNum))
-            print(string.format("Numeric Capacity: %d EU", capacityNum))
-            print(string.format("Fill Percentage: %.2f%%", fillPercent))
 
             -- Store data
             energyData[name] = {
                 title = title,
-                energy = energyNum,
-                capacity = capacityNum,
-                fillPercent = fillPercent
+                energy = energyNum
             }
         else
-            print("Warning: Missing Energy or Capacity data in panel '" .. name .. "'.")
+            print("Warning: Missing Energy data in panel '" .. name .. "'.")
         end
     end
     return energyData
+end
+
+-- Function to calculate Active Usage
+local function calculateActiveUsage(initialData, finalData)
+    local panelDataList = {}
+    for name, initial in pairs(initialData) do
+        if finalData[name] then
+            local deltaEnergy = initial.energy - finalData[name].energy
+            -- Assuming deltaEnergy positive means energy was consumed
+            local activeUsage = deltaEnergy / 400  -- 400 ticks = 20 seconds
+
+            -- Prevent negative usage (if energy increased)
+            if activeUsage < 0 then
+                activeUsage = 0
+            end
+
+            table.insert(panelDataList, {
+                title = initial.title,
+                energy = finalData[name].energy,
+                activeUsage = activeUsage
+            })
+
+            print(string.format("Panel '%s' Active Usage: %.2f EU/t", initial.title, activeUsage))
+        else
+            print(string.format("Warning: Panel '%s' not found in final energy data.", initial.title))
+        end
+    end
+    return panelDataList
 end
 
 -- Main Loop
@@ -113,8 +117,8 @@ local function main()
         return
     end
 
-    -- Table to store initial energy data
-    local panelHistory = getPanelEnergyData(panels)
+    -- Collect initial energy data
+    local initialEnergyData = getPanelEnergyData(panels)
     print("Initial energy data collected.")
 
     while true do
@@ -123,39 +127,13 @@ local function main()
         sleep(20)  -- Sleep for 20 seconds
 
         -- Collect final energy data
-        local finalEnergy = getPanelEnergyData(panels)
+        local finalEnergyData = getPanelEnergyData(panels)
         print("Final energy data collected.")
 
-        -- Calculate active usage and prepare data to send
-        local panelDataList = {}
-        for name, initial in pairs(panelHistory) do
-            if finalEnergy[name] then
-                local deltaEnergy = initial.energy - finalEnergy[name].energy
-                -- Assuming deltaEnergy positive means energy was consumed
-                local activeUsage = deltaEnergy / 400  -- 400 ticks = 20 seconds
+        -- Calculate active usage
+        local panelDataList = calculateActiveUsage(initialEnergyData, finalEnergyData)
 
-                -- Prevent negative usage (if energy increased)
-                if activeUsage < 0 then
-                    activeUsage = 0
-                end
-
-                table.insert(panelDataList, {
-                    title = initial.title,
-                    energy = finalEnergy[name].energy,
-                    fillPercent = finalEnergy[name].fillPercent,
-                    activeUsage = activeUsage
-                })
-
-                print(string.format("Panel '%s' Active Usage: %.2f EU/t", initial.title, activeUsage))
-
-                -- Update history
-                panelHistory[name] = finalEnergy[name]
-            else
-                print(string.format("Warning: Panel '%s' not found in final energy data.", initial.title))
-            end
-        end
-
-        -- Prepare data packet
+        -- Send data to mainframe
         if #panelDataList > 0 then
             local data = {
                 command = "panel_data",
@@ -167,6 +145,9 @@ local function main()
             -- Send data to mainframe
             rednet.send(powerMainframeID, data, "pesu_data")
             print("Data sent to power mainframe.")
+
+            -- Update initial data for next calculation
+            initialEnergyData = finalEnergyData
         else
             print("No active usage data to send.")
         end
