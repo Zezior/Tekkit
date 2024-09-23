@@ -1,13 +1,13 @@
 -- pesu_sender.lua
 
 -- Configuration
-local modemSide = "top"         -- Adjust the side where the wired modem is attached
-local updateInterval = 5        -- Time in seconds between sending updates
-local mainframeID = 4591        -- Mainframe's Rednet ID
-local pesuSide = "back"         -- Side where the PESU is connected (adjust as needed)
+local wirelessModemSide = "top"     -- Side where the wireless modem is attached
+local updateInterval = 5            -- Time in seconds between sending updates
+local mainframeID = 4591            -- Mainframe's Rednet ID
+local wiredModemSide = "back"       -- Side where the wired modem is attached (connected to PESUs)
 
--- Open the wired modem on the specified side
-rednet.open(modemSide)
+-- Open the wireless modem for rednet communication
+rednet.open(wirelessModemSide)
 
 -- Function to format large numbers
 local function formatNumber(num)
@@ -26,20 +26,40 @@ end
 
 -- Main function to send PESU data
 local function sendPESUData()
-    -- Get the EUOutput and EUStored from the PESU
-    local euStored = peripheral.call(pesuSide, "getEUStored")
-    local euOutput = peripheral.call(pesuSide, "getEUOutput")
+    -- Find the PESU peripheral connected via the wired modem
+    local pesuPeripheral = peripheral.find("PESU")  -- Replace "PESU" with the actual type if necessary
 
-    -- Prepare the message to send
-    if euStored and euOutput then
+    if not pesuPeripheral then
+        print("Error: No PESU peripheral found.")
+        return
+    end
+
+    -- Get the name of the PESU peripheral
+    local pesuName = peripheral.getName(pesuPeripheral)
+
+    -- List available methods for debugging
+    local methods = peripheral.getMethods(pesuName)
+    print("Available methods for PESU:")
+    for _, method in ipairs(methods) do
+        print(method)
+    end
+
+    -- Retrieve EUStored and EUOutput values based on available methods
+    local euStoredMethod = pesuPeripheral.getEUStored or pesuPeripheral.getStoredEU or pesuPeripheral.getEUStorage
+    local euOutputMethod = pesuPeripheral.getEUOutput or pesuPeripheral.getOutputEU
+
+    if euStoredMethod and euOutputMethod then
+        local storedEU = euStoredMethod()
+        local outputEU = euOutputMethod()
+
         local message = {
             command = "pesu_data",
             pesuDataList = {
                 {
                     title = "PESU",  -- You can change the title to something more specific if needed
-                    energy = euStored,
+                    energy = storedEU,
                     capacity = 1000000000,  -- Replace with actual PESU capacity if available
-                    euOutput = euOutput
+                    euOutput = outputEU
                 }
             }
         }
@@ -48,9 +68,9 @@ local function sendPESUData()
         rednet.send(mainframeID, message, "pesu_data")
 
         -- Debug print to confirm message sent
-        print("Sent PESU data to mainframe: EU Stored: " .. formatNumber(euStored) .. " EU Output: " .. formatNumber(euOutput))
+        print("Sent PESU data to mainframe: EU Stored: " .. formatNumber(storedEU) .. " EU Output: " .. formatNumber(outputEU))
     else
-        print("Error: Could not retrieve PESU data.")
+        print("Error: Could not retrieve EUStored or EUOutput methods.")
     end
 end
 

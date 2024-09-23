@@ -1,12 +1,12 @@
 -- aip_script.lua
 
 -- Configuration
-local modemSide = "back"        -- Adjust the side where the wired modem is attached
+local modemSide = "back"        -- Side where the wired modem is attached
 local updateInterval = 5        -- Time in seconds between sending updates
 local mainframeID = 4591        -- Mainframe's Rednet ID
 local panelSide = "top"         -- Side where the advanced information panel is connected
 
--- Open the wired modem on the specified side
+-- Open the wired modem for rednet communication
 rednet.open(modemSide)
 
 -- Function to extract energy data from getCardData
@@ -24,6 +24,12 @@ end
 local function sendPanelData()
     -- Get the card data from the panel
     local cardData = peripheral.call(panelSide, "getCardData")
+
+    -- Ensure cardData is valid
+    if not cardData or #cardData < 2 then
+        print("Error: Invalid card data received.")
+        return
+    end
 
     -- Extract the panel name (1st line) and energy (2nd line)
     local panelName = cardData[1]
