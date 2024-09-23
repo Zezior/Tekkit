@@ -40,15 +40,23 @@ local function sendPESUData()
     local capacityEU = pesuPeripheral.getEUCapacity()
 
     if storedEU and outputEU and capacityEU then
-        -- Prepare the message to send
+        -- Format the energy values
+        local formattedStored = formatNumber(storedEU)
+        local formattedCapacity = formatNumber(capacityEU)
+        local formattedOutput = formatNumber(outputEU)
+
+        -- Prepare the message to send (structured similarly to the old script)
         local message = {
             command = "pesu_data",
             pesuDataList = {
                 {
                     title = "PESU",
                     energy = storedEU,
+                    formattedEnergy = formattedStored,
                     capacity = capacityEU,
-                    euOutput = outputEU
+                    formattedCapacity = formattedCapacity,
+                    euOutput = outputEU,
+                    formattedOutput = formattedOutput
                 }
             }
         }
@@ -57,7 +65,7 @@ local function sendPESUData()
         rednet.send(mainframeID, message, "pesu_data")
 
         -- Debug print to confirm message sent
-        print("Sent PESU data to mainframe: EU Stored: " .. formatNumber(storedEU) .. " EU Output: " .. formatNumber(outputEU))
+        print("Sent PESU data to mainframe: EU Stored: " .. formattedStored .. " EU Output: " .. formattedOutput)
     else
         print("Error: Could not retrieve PESU data.")
     end
