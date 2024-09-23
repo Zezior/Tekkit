@@ -1,10 +1,10 @@
 -- pesu_sender.lua
 
 -- Configuration
-local wirelessModemSide = "top"     -- Side where the wireless modem is attached
-local updateInterval = 5            -- Time in seconds between sending updates
-local mainframeID = 4591            -- Mainframe's Rednet ID
-local wiredModemSide = "back"       -- Side where the wired modem is attached (connected to PESUs)
+local wirelessModemSide = "top"    -- Side where the wireless modem is attached
+local updateInterval = 5           -- Time in seconds between sending updates
+local mainframeID = 4591           -- Mainframe's Rednet ID
+local pesuSide = "back"            -- Side where the PESU is connected via the wired modem
 
 -- Open the wireless modem for rednet communication
 rednet.open(wirelessModemSide)
@@ -26,39 +26,28 @@ end
 
 -- Main function to send PESU data
 local function sendPESUData()
-    -- Find the PESU peripheral connected via the wired modem
-    local pesuPeripheral = peripheral.find("PESU")  -- Replace "PESU" with the actual type if necessary
+    -- Wrap the PESU peripheral connected via the wired modem
+    local pesuPeripheral = peripheral.wrap(pesuSide)
 
     if not pesuPeripheral then
-        print("Error: No PESU peripheral found.")
+        print("Error: No PESU peripheral found on side: " .. pesuSide)
         return
     end
 
-    -- Get the name of the PESU peripheral
-    local pesuName = peripheral.getName(pesuPeripheral)
+    -- Retrieve EUStored, EUOutput, and EUCapacity values
+    local storedEU = pesuPeripheral.getEUStored()
+    local outputEU = pesuPeripheral.getEUOutput()
+    local capacityEU = pesuPeripheral.getEUCapacity()
 
-    -- List available methods for debugging
-    local methods = peripheral.getMethods(pesuName)
-    print("Available methods for PESU:")
-    for _, method in ipairs(methods) do
-        print(method)
-    end
-
-    -- Retrieve EUStored and EUOutput values based on available methods
-    local euStoredMethod = pesuPeripheral.getEUStored or pesuPeripheral.getStoredEU or pesuPeripheral.getEUStorage
-    local euOutputMethod = pesuPeripheral.getEUOutput or pesuPeripheral.getOutputEU
-
-    if euStoredMethod and euOutputMethod then
-        local storedEU = euStoredMethod()
-        local outputEU = euOutputMethod()
-
+    if storedEU and outputEU and capacityEU then
+        -- Prepare the message to send
         local message = {
             command = "pesu_data",
             pesuDataList = {
                 {
-                    title = "PESU",  -- You can change the title to something more specific if needed
+                    title = "PESU",
                     energy = storedEU,
-                    capacity = 1000000000,  -- Replace with actual PESU capacity if available
+                    capacity = capacityEU,
                     euOutput = outputEU
                 }
             }
@@ -70,7 +59,7 @@ local function sendPESUData()
         -- Debug print to confirm message sent
         print("Sent PESU data to mainframe: EU Stored: " .. formatNumber(storedEU) .. " EU Output: " .. formatNumber(outputEU))
     else
-        print("Error: Could not retrieve EUStored or EUOutput methods.")
+        print("Error: Could not retrieve PESU data.")
     end
 end
 
