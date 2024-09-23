@@ -2,10 +2,10 @@
 -- pesu_sender.lua
 
 -- Configuration
-local wirelessModemSide = "top"    -- Side where the wireless modem is attached
-local updateInterval = 5           -- Time in seconds between sending updates
-local mainframeID = 4591           -- Mainframe's Rednet ID
-local pesuSide = "back"            -- Side where the PESU is connected via the wired modem
+local wirelessModemSide = "top"          -- Side where the wireless modem is attached
+local updateInterval = 5                 -- Time in seconds between sending updates
+local mainframeID = 4591                 -- Mainframe's Rednet ID
+local pesuPeripheralName = "ic2:pesu_222" -- Detected PESU peripheral name
 
 -- Open the wireless modem for rednet communication
 rednet.open(wirelessModemSide)
@@ -27,15 +27,15 @@ end
 
 -- Main function to send PESU data
 local function sendPESUData()
-    -- Wrap the PESU peripheral connected via the wired modem
-    local pesuPeripheral = peripheral.wrap(pesuSide)
+    -- Wrap the PESU peripheral using the actual peripheral name
+    local pesuPeripheral = peripheral.wrap(pesuPeripheralName)
 
     if not pesuPeripheral then
-        print("Error: No PESU peripheral found on side: " .. pesuSide)
+        print("Error: No PESU peripheral found with name: " .. pesuPeripheralName)
         return
     end
 
-    -- Dynamically check for methods (to avoid the nil method error)
+    -- Dynamically check for methods (to avoid nil method error)
     local storedEU = pesuPeripheral.getEUStored and pesuPeripheral.getEUStored() or 0
     local outputEU = pesuPeripheral.getEUOutput and pesuPeripheral.getEUOutput() or 0
     local capacityEU = pesuPeripheral.getEUCapacity and pesuPeripheral.getEUCapacity() or 0
