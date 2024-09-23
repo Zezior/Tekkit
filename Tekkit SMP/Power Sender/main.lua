@@ -1,5 +1,5 @@
 -- pesu_sender.lua
--- update
+
 -- Configuration
 local wirelessModemSide = "top"          -- Side where the wireless modem is attached
 local updateInterval = 5                 -- Time in seconds between sending updates
@@ -39,18 +39,18 @@ local function sendPESUData()
     local outputEU = pesuPeripheral.getEUOutput and pesuPeripheral.getEUOutput() or 0
     local capacityEU = pesuPeripheral.getEUCapacity and pesuPeripheral.getEUCapacity() or 0
 
-    if storedEU > 0 and outputEU > 0 and capacityEU > 0 then
+    if storedEU > 0 and capacityEU > 0 then
         -- Format the energy values
         local formattedStored = formatNumber(storedEU)
         local formattedCapacity = formatNumber(capacityEU)
         local formattedOutput = formatNumber(outputEU)
 
-        -- Prepare the message to send
+        -- Prepare the message to send in the expected format for the mainframe
         local message = {
             command = "pesu_data",
             pesuDataList = {
                 {
-                    title = "PESU",
+                    title = "PESU " .. pesuPeripheralName,  -- Title for the PESU
                     energy = storedEU,
                     formattedEnergy = formattedStored,
                     capacity = capacityEU,
