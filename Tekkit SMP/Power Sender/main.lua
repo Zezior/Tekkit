@@ -1,4 +1,3 @@
--- 1
 -- pesu_sender.lua
 
 -- Configuration
