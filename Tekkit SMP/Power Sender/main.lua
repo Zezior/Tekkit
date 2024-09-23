@@ -1,10 +1,9 @@
--- pesu_sender.lua
+-- pesu_sender_auto.lua
 
 -- Configuration
-local wirelessModemSide = "top"          -- Side where the wireless modem is attached
-local updateInterval = 5                 -- Time in seconds between sending updates
-local mainframeID = 4591                 -- Mainframe's Rednet ID
-local pesuPeripheralName = "ic2:pesu_222" -- Detected PESU peripheral name
+local wirelessModemSide = "top"    -- Side where the wireless modem is attached
+local updateInterval = 5           -- Time in seconds between sending updates
+local mainframeID = 4591           -- Mainframe's Rednet ID
 
 -- Open the wireless modem for rednet communication
 rednet.open(wirelessModemSide)
@@ -24,50 +23,83 @@ local function formatNumber(num)
     end
 end
 
+-- Function to detect PESU peripherals
+local function detectPESUs()
+    local pesuList = {}
+    
+    -- Get the names of all peripherals connected to the computer
+    local peripheralNames = peripheral.getNames()
+
+    -- Loop through the peripheral names to find PESUs
+    for _, name in ipairs(peripheralNames) do
+        -- Check if the peripheral is a PESU (assuming the type starts with 'ic2:pesu')
+        if peripheral.getType(name):find("pesu") then
+            table.insert(pesuList, name)
+        end
+    end
+
+    return pesuList
+end
+
 -- Main function to send PESU data
 local function sendPESUData()
-    -- Wrap the PESU peripheral using the actual peripheral name
-    local pesuPeripheral = peripheral.wrap(pesuPeripheralName)
+    -- Detect all connected PESUs
+    local pesus = detectPESUs()
 
-    if not pesuPeripheral then
-        print("Error: No PESU peripheral found with name: " .. pesuPeripheralName)
+    if #pesus == 0 then
+        print("Error: No PESU peripherals detected.")
         return
     end
 
-    -- Dynamically check for methods (to avoid nil method error)
-    local storedEU = pesuPeripheral.getEUStored and pesuPeripheral.getEUStored() or 0
-    local outputEU = pesuPeripheral.getEUOutput and pesuPeripheral.getEUOutput() or 0
-    local capacityEU = pesuPeripheral.getEUCapacity and pesuPeripheral.getEUCapacity() or 0
+    -- Prepare the list of PESU data to send
+    local pesuDataList = {}
 
-    if storedEU > 0 and capacityEU > 0 then
-        -- Format the energy values
-        local formattedStored = formatNumber(storedEU)
-        local formattedCapacity = formatNumber(capacityEU)
-        local formattedOutput = formatNumber(outputEU)
+    for _, pesuName in ipairs(pesus) do
+        -- Wrap the PESU peripheral
+        local pesuPeripheral = peripheral.wrap(pesuName)
 
-        -- Prepare the message to send in the expected format for the mainframe
-        local message = {
-            command = "pesu_data",
-            pesuDataList = {
-                {
-                    title = "PESU " .. pesuPeripheralName,  -- Title for the PESU
+        if pesuPeripheral then
+            -- Retrieve EUStored, EUOutput, and EUCapacity values
+            local storedEU = pesuPeripheral.getEUStored and pesuPeripheral.getEUStored() or 0
+            local outputEU = pesuPeripheral.getEUOutput and pesuPeripheral.getEUOutput() or 0
+            local capacityEU = pesuPeripheral.getEUCapacity and pesuPeripheral.getEUCapacity() or 0
+
+            if storedEU > 0 and capacityEU > 0 then
+                -- Format the energy values
+                local formattedStored = formatNumber(storedEU)
+                local formattedCapacity = formatNumber(capacityEU)
+                local formattedOutput = formatNumber(outputEU)
+
+                -- Add the PESU data to the list
+                table.insert(pesuDataList, {
+                    title = "PESU " .. pesuName,  -- Title for the PESU
                     energy = storedEU,
                     formattedEnergy = formattedStored,
                     capacity = capacityEU,
                     formattedCapacity = formattedCapacity,
                     euOutput = outputEU,
                     formattedOutput = formattedOutput
-                }
-            }
+                })
+
+                -- Debug print to confirm data
+                print("Detected PESU: " .. pesuName .. " - EU Stored: " .. formattedStored .. " EU Output: " .. formattedOutput)
+            else
+                print("Error: Could not retrieve data from PESU: " .. pesuName)
+            end
+        else
+            print("Error: Could not wrap PESU: " .. pesuName)
+        end
+    end
+
+    -- Send the PESU data to the mainframe
+    if #pesuDataList > 0 then
+        local message = {
+            command = "pesu_data",
+            pesuDataList = pesuDataList
         }
 
-        -- Send the data to the mainframe
         rednet.send(mainframeID, message, "pesu_data")
-
-        -- Debug print to confirm message sent
-        print("Sent PESU data to mainframe: EU Stored: " .. formattedStored .. " EU Output: " .. formattedOutput)
-    else
-        print("Error: Could not retrieve PESU data.")
+        print("Sent PESU data to mainframe.")
     end
 end
 
