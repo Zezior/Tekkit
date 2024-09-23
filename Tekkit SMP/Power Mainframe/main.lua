@@ -161,31 +161,6 @@ local function processPESUData()
                 })
             end
         end
-
-        -- Process Panel data
-        if data.panelDataList then
-            for _, panelData in ipairs(data.panelDataList) do
-                -- Use senderID and panelName as unique identifier
-                local panelID = senderID .. "_" .. panelData.title
-
-                -- Get existing data or initialize
-                local existingData = panelDataList[panelID] or {}
-
-                -- Update the panel data
-                existingData.title = panelData.title or existingData.title
-                existingData.energy = panelData.energy
-                existingData.averageEUT = panelData.activeUsage
-
-                -- Update the panel data in the list
-                panelDataList[panelID] = existingData
-
-                -- Debug: Print panel data
-                print("Panel Data for", panelID)
-                print("Title:", existingData.title)
-                print("Energy:", existingData.energy)
-                print("Average EU/t:", existingData.averageEUT or "Calculating...")
-            end
-        end
     end
 
     -- Update the number of PESU pages
@@ -370,18 +345,18 @@ local function main()
             end
         end,
         function()  -- Handle Incoming PESU Data
-                while true do
-                    local event, senderID, message, protocol = os.pullEvent("rednet_message")
-                    if protocol == "pesu_data" then
-                        if type(message) == "table" and message.command == "pesu_data" then
-                            -- Store the PESU data from the sender
-                            pesuDataFromSenders[senderID] = message
-                            displayNeedsRefresh = true  -- Update display
-                        else
-                            print("Warning: Received malformed data from Sender ID: " .. senderID)
-                        end
+            while true do
+                local event, senderID, message, protocol = os.pullEvent("rednet_message")
+                if protocol == "pesu_data" then
+                    if type(message) == "table" and message.command == "pesu_data" then
+                        -- Store the PESU data from the sender
+                        pesuDataFromSenders[senderID] = message
+                        processPESUData()  -- Update data processing
+                    else
+                        print("Warning: Received malformed data from Sender ID: " .. senderID)
                     end
                 end
+            end
         end
     )
 end
