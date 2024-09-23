@@ -1,10 +1,10 @@
 -- aip_script.lua
 
 -- Configuration
-local modemSide = "back"         -- Adjust the side where the wired modem is attached
+local modemSide = "back"        -- Adjust the side where the wired modem is attached
 local updateInterval = 5        -- Time in seconds between sending updates
 local mainframeID = 4591        -- Mainframe's Rednet ID
-local panelSide = "top"        -- Side where the advanced information panel is connected
+local panelSide = "top"         -- Side where the advanced information panel is connected
 
 -- Open the wired modem on the specified side
 rednet.open(modemSide)
