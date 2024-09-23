@@ -1,5 +1,5 @@
---- pesu_sender.lua
-
+-- pesu_sender.lua
+-- update
 -- Configuration
 local wirelessModemSide = "top"          -- Side where the wireless modem is attached
 local updateInterval = 5                 -- Time in seconds between sending updates
