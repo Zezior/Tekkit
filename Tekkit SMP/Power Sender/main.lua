@@ -1,4 +1,4 @@
--- pesu_sender.lua
+--- pesu_sender.lua
 
 -- Configuration
 local wirelessModemSide = "top"          -- Side where the wireless modem is attached
