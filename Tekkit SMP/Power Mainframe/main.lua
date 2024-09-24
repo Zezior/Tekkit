@@ -248,14 +248,15 @@ local function displayPESUPage(pesuData)
     end
 
     for idx, data in ipairs(pesuData) do
+        local globalIdx = (currentPesuPage - 1) * pesusPerColumn * columnsPerPage + idx
         local column = math.ceil(idx / pesusPerColumn)
         if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
         local y = dataStartY + ((idx - 1) % pesusPerColumn) + 2  -- Adjusted Y position
         local fillPercentage = (data.stored / data.capacity) * 100
         setColorBasedOnPercentage(fillPercentage)
-        monitor.setCursorPos(x + (columnWidth - 8) / 2, y)
-        monitor.write(formatPercentage(fillPercentage))
+        monitor.setCursorPos(x + 1, y)
+        monitor.write(string.format("PESU %d: %s", globalIdx, formatPercentage(fillPercentage)))
     end
     monitor.setTextColor(colors.black)
 end
@@ -291,7 +292,7 @@ local function displayHomePage()
     else
         local top10 = {}
         for idx, pesu in ipairs(pesuList) do
-            table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity})
+            table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, index = idx})
         end
 
         -- Sort PESUs by percentage drained (ascending)
@@ -306,7 +307,7 @@ local function displayHomePage()
             local pesu = top10[i]
             local fillPercentage = (pesu.stored / pesu.capacity) * 100
             setColorBasedOnPercentage(fillPercentage)
-            local text = formatPercentage(fillPercentage)
+            local text = string.format("PESU %d: %s", pesu.index, formatPercentage(fillPercentage))
             monitor.setCursorPos(leftColumnX + math.floor((leftColumnWidth - #text) / 2), leftColumnStartY + i)
             monitor.write(text)
         end
@@ -358,34 +359,39 @@ local function displayHomePage()
     -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = (totalStored / totalCapacity) * 100
     local progressBarWidth = w - 4  -- Leave some padding on sides
-    local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
-    local emptyBars = (progressBarWidth - 2) - filledBars
+    local filledBars = math.floor((totalFillPercentage / 100) * progressBarWidth)
+    local emptyBars = progressBarWidth - filledBars
 
     local progressBarY = h - 6
 
-    -- Draw border
+    -- Draw progress bar
     monitor.setCursorPos(3, progressBarY)
     monitor.setBackgroundColor(colors.black)
-    monitor.write(string.rep(" ", progressBarWidth))
+    monitor.write(string.rep(" ", progressBarWidth))  -- Top border
+
     monitor.setCursorPos(3, progressBarY + 1)
-    monitor.write(" ")
+    monitor.write(" ")  -- Left border
     monitor.setCursorPos(2 + progressBarWidth, progressBarY + 1)
-    monitor.write(" ")
-    monitor.setCursorPos(3, progressBarY + 2)
-    monitor.write(string.rep(" ", progressBarWidth))
+    monitor.write(" ")  -- Right border
 
     -- Draw filled portion
     setColorBasedOnPercentage(totalFillPercentage)
-    monitor.setBackgroundColor(colors.white)
+    monitor.setBackgroundColor(colors.black)
+    monitor.setCursorPos(4, progressBarY + 1)
+    monitor.write(string.rep(" ", progressBarWidth - 2))  -- Clear inside
+
+    monitor.setBackgroundColor(monitor.getTextColor())
     monitor.setCursorPos(4, progressBarY + 1)
     monitor.write(string.rep(" ", filledBars))
+
+    -- Write percentage over the progress bar
     monitor.setBackgroundColor(colors.white)
     monitor.setTextColor(colors.black)
-    -- Write percentage over the progress bar
     local percentageText = formatPercentage(totalFillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
     monitor.setCursorPos(percentageX, progressBarY + 1)
     monitor.write(percentageText)
+
     monitor.setBackgroundColor(colors.white)
     monitor.setTextColor(colors.black)
 end
