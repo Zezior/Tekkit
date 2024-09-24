@@ -3,13 +3,16 @@
 -- Configuration
 local panelSide = "top"         -- Side where the advanced information panel is connected
 local updateInterval = 5        -- Time in seconds between sending updates
-local mainframeID = 4591        -- Mainframe's Rednet ID
+local mainframeID = 4644        -- Updated Mainframe's Rednet ID
+
+-- Open the wireless modem for rednet communication
+rednet.open("back")  -- Adjust the side where your modem is connected
 
 -- Function to extract energy data from getCardData
 local function extractEnergy(dataLine)
-    local energyStr = dataLine:match("Energy:%s*([%d%s]+)%s*EU")
+    local energyStr = dataLine:match("Energy:%s*([%d,%.]+)%s*EU")
     if energyStr then
-        local energyValue = tonumber(energyStr:gsub("%s", ""))  -- Remove spaces and convert to number
+        local energyValue = tonumber((energyStr:gsub(",", "")))
         return energyValue
     else
         return nil
@@ -29,6 +32,17 @@ local function sendPanelData()
     -- Get the card data from the panel
     local cardData = panelPeripheral.getCardData()
 
+    -- Debug: Print the cardData content
+    if cardData then
+        print("Card Data:")
+        for idx, line in ipairs(cardData) do
+            print(idx .. ": " .. line)
+        end
+    else
+        print("Error: cardData is nil")
+        return
+    end
+
     -- Ensure cardData is valid
     if not cardData or #cardData < 2 then
         print("Error: Invalid card data received.")
@@ -47,8 +61,8 @@ local function sendPanelData()
             panelDataList = {
                 {
                     title = panelName,
-                    energy = energyValue,
-                    activeUsage = 100  -- Placeholder for active usage, replace with actual data if available
+                    energy = energyValue
+                    -- You can add more fields if needed
                 }
             }
         }

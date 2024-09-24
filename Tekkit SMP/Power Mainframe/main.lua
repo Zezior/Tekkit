@@ -35,13 +35,13 @@ local lastEUStored = nil
 local averageEUT = 0
 
 -- Variables to store panel data
-local panelDataList = {}  -- Stores panel data, indexed by panelID
+local panelDataList = {}  -- Stores panel data, indexed by senderID
 
 -- Additional variables for timing
 local lastUpdateTime = os.clock()
 
--- List of allowed sender IDs
-local allowedSenderIDs = {4855}
+-- List of allowed sender IDs (Add the IDs of your trusted sender computers)
+local allowedSenderIDs = {4855}  -- Update this to include IDs of allowed senders
 
 -- Function to format large numbers
 local function formatNumber(num)
@@ -59,8 +59,8 @@ local function formatNumber(num)
 end
 
 -- Helper function to check if a value exists in a table
-function table.contains(table, element)
-    for _, value in pairs(table) do
+local function tableContains(tbl, element)
+    for _, value in pairs(tbl) do
         if value == element then
             return true
         end
@@ -155,7 +155,7 @@ local function processPESUData()
                     stored = pesuData.energy,
                     capacity = 1000000000,  -- Fixed capacity
                     senderID = senderID,
-                    pesuName = pesuData.title  -- PESU Name (e.g., "PESU 172")
+                    pesuName = "PESU"  -- Since IDs are not needed
                 })
             end
         end
@@ -168,7 +168,6 @@ local function processPESUData()
     centerButtons()
 
     -- All PESUs on one page
-    pagesData = {}
     pagesData[1] = pesuList
 
     -- Debug print
@@ -234,27 +233,41 @@ local function displayHomePage()
     if #pesuList == 0 then
         monitor.setCursorPos(1, 3)
         monitor.write("No PESU data available.")
-        return
+    else
+        local top10 = {}
+        for idx, pesu in ipairs(pesuList) do
+            table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, pesuName = pesu.pesuName})
+        end
+
+        -- Sort PESUs by percentage drained (ascending)
+        table.sort(top10, function(a, b)
+            local aPercent = (a.stored / a.capacity)
+            local bPercent = (b.stored / b.capacity)
+            return aPercent < bPercent
+        end)
+
+        -- Display top 10
+        for i = 1, math.min(10, #top10) do
+            local pesu = top10[i]
+            monitor.setTextColor(colors.white)
+            monitor.setCursorPos(1, i + 2)
+            monitor.write(string.format("%s: %s / 1 bil", pesu.pesuName, formatNumber(pesu.stored)))
+        end
     end
 
-    local top10 = {}
-    for idx, pesu in ipairs(pesuList) do
-        table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, pesuName = pesu.pesuName})
-    end
+    -- Display panel data
+    monitor.setCursorPos(math.floor(w / 2), 1)
+    monitor.write("Panel Data:")
 
-    -- Sort PESUs by percentage drained (ascending)
-    table.sort(top10, function(a, b)
-        local aPercent = (a.stored / a.capacity)
-        local bPercent = (b.stored / b.capacity)
-        return aPercent < bPercent
-    end)
+    local y = 3  -- Start below the title
+    for _, panelData in pairs(panelDataList) do
+        monitor.setCursorPos(math.floor(w / 2), y)
+        monitor.write(panelData.title or "Panel")
+        y = y + 1
 
-    -- Display top 10
-    for i = 1, math.min(10, #top10) do
-        local pesu = top10[i]
-        monitor.setTextColor(colors.white)
-        monitor.setCursorPos(1, i + 2)
-        monitor.write(string.format("%s: %s / 1 bil", pesu.pesuName, formatNumber(pesu.stored)))
+        monitor.setCursorPos(math.floor(w / 2), y)
+        monitor.write(formatNumber(panelData.energy) .. " / " .. formatNumber(panelData.capacity))
+        y = y + 2  -- Add extra space between panels
     end
 
     -- Display total EU stored and capacity as raw values, centered above buttons
@@ -263,7 +276,7 @@ local function displayHomePage()
     centerText("Total EU Capacity: " .. formatNumber(totalCapacity), h - 5)
 end
 
--- Main function for live page updates and PESU data processing
+-- Main function for live page updates and data processing
 local function main()
     page = "home"  -- Ensure the page is set to "home" on start
 
@@ -275,9 +288,9 @@ local function main()
 
     local displayNeedsRefresh = true  -- Flag to indicate display needs refresh
 
-    -- Start PESU data processing and page refreshing in parallel
+    -- Start data processing and page refreshing in parallel
     parallel.waitForAny(
-        function()  -- PESU Data Processing Loop
+        function()  -- Data Processing Loop
             while true do
                 processPESUData()
                 calculateAverageEUT()
@@ -309,24 +322,39 @@ local function main()
                 sleep(0.05)  -- Allow for faster reaction to button presses
             end
         end,
-        function()  -- Handle Incoming PESU Data
+        function()  -- Handle Incoming Data
             while true do
                 local event, senderID, message, protocol = os.pullEvent("rednet_message")
                 print("Received message from ID:", senderID)
                 if protocol == "pesu_data" then
                     if type(message) == "table" and message.command == "pesu_data" then
-                        if table.contains(allowedSenderIDs, senderID) then
+                        if tableContains(allowedSenderIDs, senderID) then
                             -- Store the PESU data from the sender
                             pesuDataFromSenders[senderID] = message
                             processPESUData()  -- Update data processing
                             displayNeedsRefresh = true
-                            print("Processed data from sender ID:", senderID)
+                            print("Processed PESU data from sender ID:", senderID)
                         else
                             print("Ignored data from sender ID:", senderID)
                         end
                     else
-                        print("Warning: Received malformed data from Sender ID:", senderID)
+                        print("Warning: Received malformed PESU data from Sender ID:", senderID)
                     end
+                elseif protocol == "panel_data" then
+                    if type(message) == "table" and message.command == "panel_data" then
+                        if tableContains(allowedSenderIDs, senderID) then
+                            -- Store the panel data from the sender
+                            panelDataList[senderID] = message.panelDataList[1]  -- Assuming one panel per sender
+                            displayNeedsRefresh = true
+                            print("Processed panel data from sender ID:", senderID)
+                        else
+                            print("Ignored panel data from sender ID:", senderID)
+                        end
+                    else
+                        print("Warning: Received malformed panel data from Sender ID:", senderID)
+                    end
+                else
+                    print("Warning: Received unknown protocol message from Sender ID:", senderID)
                 end
             end
         end

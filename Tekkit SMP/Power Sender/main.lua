@@ -3,7 +3,7 @@
 -- Configuration
 local wirelessModemSide = "top"    -- Side where the wireless modem is attached
 local updateInterval = 5           -- Time in seconds between sending updates
--- local mainframeID = 4591           -- Removed since we're broadcasting
+local mainframeID = 4644           -- Mainframe's Rednet ID
 
 -- Open the wireless modem for rednet communication
 rednet.open(wirelessModemSide)
@@ -65,15 +65,15 @@ local function sendPESUData()
             -- Fixed capacity
             local capacityEU = 1000000000  -- 1,000,000,000 EU
 
-            -- Extract PESU ID from the pesuName
-            local pesuID = pesuName:match("ic2:pesu_(%d+)") or pesuName
+            -- Since PESU IDs are not needed, we set the title to "PESU"
+            local pesuTitle = "PESU"
 
             -- Format the energy values
             local formattedStored = formatNumber(storedEU)
 
             -- Add the PESU data to the list
             table.insert(pesuDataList, {
-                title = "PESU " .. pesuID,  -- Title for the PESU
+                title = pesuTitle,  -- Title for the PESU
                 energy = storedEU
             })
 
@@ -91,8 +91,8 @@ local function sendPESUData()
             pesuDataList = pesuDataList
         }
 
-        rednet.broadcast(message, "pesu_data")
-        print("Broadcasted PESU data.")
+        rednet.send(mainframeID, message, "pesu_data")
+        print("Sent PESU data to mainframe.")
     end
 end
 
