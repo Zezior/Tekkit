@@ -18,7 +18,7 @@ local monitor = peripheral.wrap(monitorSide)
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
 
 -- Clear the monitor fully on startup
-monitor.setBackgroundColor(colors.black)
+monitor.setBackgroundColor(colors.white)
 monitor.clear()
 
 local buttonList = {}  -- Store buttons for click detection
@@ -28,9 +28,10 @@ local pagesData = {} -- Data for PESU pages
 local refreshInterval = 2  -- Refresh PESU data every 2 seconds
 local totalStored, totalCapacity = 0, 0  -- Store totals
 local pesusPerColumn = 25  -- Number of PESUs per column
-local columnsPerPage = 4   -- Number of columns per page
+local columnsPerPage = 3   -- Number of columns per page on PESU page
 local pesuList = {}  -- List of all PESUs
-local numPesuPages = 1  -- Number of PESU pages is 1
+local numPesuPages = 1  -- Number of PESU pages
+local currentPesuPage = 1 -- Current PESU page displayed
 local lastSentState = nil  -- Track the last sent state to prevent spamming messages
 
 -- Variables for tracking PESU data from sender computers
@@ -43,6 +44,9 @@ local panelDataList = {}  -- Stores panel data, indexed by senderID
 
 -- Additional variables for timing
 local lastUpdateTime = os.clock()
+
+-- Variable to store reactor status
+local reactorsStatus = "off" -- Default status; will be updated based on received messages
 
 -- Function to format percentages
 local function formatPercentage(value)
@@ -95,7 +99,7 @@ local function drawButton(label, x, y, width, height, color)
     local labelY = y + math.floor(height / 2)
     monitor.setCursorPos(labelX, labelY)
     monitor.write(label)
-    monitor.setBackgroundColor(colors.black)
+    monitor.setBackgroundColor(colors.white)
 end
 
 -- Function to define a button
@@ -109,22 +113,52 @@ local function centerButtons()
     local buttonWidth = 10  -- Width of each button
     local buttonHeight = 3  -- Height of each button
     local totalButtons = 2  -- Home button + PESU page
+    if numPesuPages > 1 then
+        totalButtons = totalButtons + 2  -- Add Previous and Next buttons
+    end
     local totalWidth = totalButtons * buttonWidth + (totalButtons - 1) * 2
     local startX = math.floor((w - totalWidth) / 2) + 1
 
     buttonList = {}  -- Reset button list
 
     -- Define Home button
-    defineButton("Home", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "home"; displayNeedsRefresh = true end)
+    defineButton("Home", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
+        page = "home"
+        displayNeedsRefresh = true
+    end)
     startX = startX + buttonWidth + 2
 
     -- Define PESU page button
-    defineButton("PESUs", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "pesu"; displayNeedsRefresh = true end)
+    defineButton("PESUs", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
+        page = "pesu"
+        currentPesuPage = 1
+        displayNeedsRefresh = true
+    end)
+    startX = startX + buttonWidth + 2
+
+    if page == "pesu" and numPesuPages > 1 then
+        -- Define Previous Page button
+        defineButton("Prev", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
+            if currentPesuPage > 1 then
+                currentPesuPage = currentPesuPage - 1
+                displayNeedsRefresh = true
+            end
+        end)
+        startX = startX + buttonWidth + 2
+
+        -- Define Next Page button
+        defineButton("Next", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
+            if currentPesuPage < numPesuPages then
+                currentPesuPage = currentPesuPage + 1
+                displayNeedsRefresh = true
+            end
+        end)
+    end
 end
 
 -- Function to clear the monitor except for the buttons
 local function clearMonitorExceptButtons()
-    monitor.setBackgroundColor(colors.black)
+    monitor.setBackgroundColor(colors.white)
     monitor.clear()
     -- Redraw buttons after clearing the screen
     for _, button in ipairs(buttonList) do
@@ -165,15 +199,23 @@ local function processPESUData()
         end
     end
 
-    -- All PESUs on one page
-    numPesuPages = 1
+    -- Calculate number of PESU pages
+    local pesusPerPage = pesusPerColumn * columnsPerPage
+    numPesuPages = math.ceil(#pesuList / pesusPerPage)
 
     -- Recalculate button positions
     centerButtons()
 
-    -- All PESUs on one page
+    -- Organize PESUs into pages
     pagesData = {}
-    pagesData[1] = pesuList
+    for pageNum = 1, numPesuPages do
+        pagesData[pageNum] = {}
+        local startIdx = (pageNum - 1) * pesusPerPage + 1
+        local endIdx = math.min(pageNum * pesusPerPage, #pesuList)
+        for idx = startIdx, endIdx do
+            table.insert(pagesData[pageNum], pesuList[idx])
+        end
+    end
 
     -- Debug print
     print("Processed PESU Data. Total PESUs:", #pesuList)
@@ -190,13 +232,11 @@ local function displayPESUPage(pesuData)
     -- Centered Title
     monitor.setTextColor(colors.green)
     centerText("NuclearCity Power Facility", titleY)
-    monitor.setTextColor(colors.white)
+    monitor.setTextColor(colors.black)
 
-    monitor.setCursorPos(1, dataStartY)
-    monitor.write("PESU List (Fill Percentage):")
-
+    -- Display PESUs
     if #pesuData == 0 then
-        monitor.setCursorPos(1, dataStartY + 2)
+        monitor.setCursorPos(1, dataStartY)
         monitor.write("No PESU data available.")
         return
     end
@@ -214,10 +254,10 @@ local function displayPESUPage(pesuData)
         local y = dataStartY + ((idx - 1) % pesusPerColumn) + 2  -- Adjusted Y position
         local fillPercentage = (data.stored / data.capacity) * 100
         setColorBasedOnPercentage(fillPercentage)
-        monitor.setCursorPos(x, y)
-        monitor.write(string.format("PESU: %s", formatPercentage(fillPercentage)))
+        monitor.setCursorPos(x + (columnWidth - 8) / 2, y)
+        monitor.write(formatPercentage(fillPercentage))
     end
-    monitor.setTextColor(colors.white)
+    monitor.setTextColor(colors.black)
 end
 
 -- Function to display the Home Page
@@ -232,7 +272,7 @@ local function displayHomePage()
     -- Centered Title with green font
     monitor.setTextColor(colors.green)
     centerText("NuclearCity Power Facility", titleY)
-    monitor.setTextColor(colors.white)
+    monitor.setTextColor(colors.black)
 
     local leftColumnWidth = math.floor(w / 2)
     local rightColumnWidth = w - leftColumnWidth - 1
@@ -266,10 +306,11 @@ local function displayHomePage()
             local pesu = top10[i]
             local fillPercentage = (pesu.stored / pesu.capacity) * 100
             setColorBasedOnPercentage(fillPercentage)
-            monitor.setCursorPos(leftColumnX + 2, leftColumnStartY + i)
-            monitor.write(string.format("PESU: %s", formatPercentage(fillPercentage)))
+            local text = formatPercentage(fillPercentage)
+            monitor.setCursorPos(leftColumnX + math.floor((leftColumnWidth - #text) / 2), leftColumnStartY + i)
+            monitor.write(text)
         end
-        monitor.setTextColor(colors.white)
+        monitor.setTextColor(colors.black)
     end
 
     -- Right Column Title centered in right half
@@ -284,40 +325,69 @@ local function displayHomePage()
         monitor.write("No Panel data available.")
     else
         for senderID, panelData in pairs(panelDataList) do
-            monitor.setTextColor(colors.white)
-            monitor.setCursorPos(rightColumnX + 2, panelY)
+            monitor.setTextColor(colors.black)
+            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #panelData.title) / 2), panelY)
             monitor.write(panelData.title)
             panelY = panelY + 1
 
-            monitor.setCursorPos(rightColumnX + 2, panelY)
-            monitor.write(string.format("Power Usage: %.2f EU/T", panelData.energyUsage))
+            local usageText = string.format("Power Usage: %.2f EU/T", panelData.energyUsage)
+            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
+            monitor.write(usageText)
             panelY = panelY + 1
 
-            monitor.setCursorPos(rightColumnX + 2, panelY)
+            local fillText = "Filled: " .. formatPercentage(panelData.fillPercentage)
             setColorBasedOnPercentage(panelData.fillPercentage)
-            monitor.write(string.format("Filled: %s", formatPercentage(panelData.fillPercentage)))
+            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
+            monitor.write(fillText)
             panelY = panelY + 2  -- Add extra space between panels
         end
-        monitor.setTextColor(colors.white)
+        monitor.setTextColor(colors.black)
     end
+
+    -- Display reactor status above progress bar
+    local reactorStatusY = h - 8
+    if reactorsStatus == "on" then
+        monitor.setTextColor(colors.green)
+        centerText("Reactors are ON", reactorStatusY)
+    else
+        monitor.setTextColor(colors.red)
+        centerText("Reactors are OFF", reactorStatusY)
+    end
+    monitor.setTextColor(colors.black)
 
     -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = (totalStored / totalCapacity) * 100
     local progressBarWidth = w - 4  -- Leave some padding on sides
-    local filledBars = math.floor((totalFillPercentage / 100) * progressBarWidth)
-    local emptyBars = progressBarWidth - filledBars
+    local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
+    local emptyBars = (progressBarWidth - 2) - filledBars
 
-    local progressBar = string.rep("|", filledBars) .. string.rep(" ", emptyBars)
     local progressBarY = h - 6
-    setColorBasedOnPercentage(totalFillPercentage)
+
+    -- Draw border
     monitor.setCursorPos(3, progressBarY)
-    monitor.write(progressBar)
-    monitor.setTextColor(colors.white)
+    monitor.setBackgroundColor(colors.black)
+    monitor.write(string.rep(" ", progressBarWidth))
+    monitor.setCursorPos(3, progressBarY + 1)
+    monitor.write(" ")
+    monitor.setCursorPos(2 + progressBarWidth, progressBarY + 1)
+    monitor.write(" ")
+    monitor.setCursorPos(3, progressBarY + 2)
+    monitor.write(string.rep(" ", progressBarWidth))
+
+    -- Draw filled portion
+    setColorBasedOnPercentage(totalFillPercentage)
+    monitor.setBackgroundColor(colors.white)
+    monitor.setCursorPos(4, progressBarY + 1)
+    monitor.write(string.rep(" ", filledBars))
+    monitor.setBackgroundColor(colors.white)
+    monitor.setTextColor(colors.black)
     -- Write percentage over the progress bar
     local percentageText = formatPercentage(totalFillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
-    monitor.setCursorPos(percentageX, progressBarY)
+    monitor.setCursorPos(percentageX, progressBarY + 1)
     monitor.write(percentageText)
+    monitor.setBackgroundColor(colors.white)
+    monitor.setTextColor(colors.black)
 end
 
 -- Main function for live page updates and data processing
@@ -327,7 +397,7 @@ local function main()
     centerButtons()  -- Center the buttons at the start
 
     -- Clear the monitor fully on startup
-    monitor.setBackgroundColor(colors.black)
+    monitor.setBackgroundColor(colors.white)
     monitor.clear()
 
     local displayNeedsRefresh = true  -- Flag to indicate display needs refresh
@@ -347,7 +417,7 @@ local function main()
                     if page == "home" then
                         displayHomePage()  -- Refresh homepage with live data
                     elseif page == "pesu" then
-                        displayPESUPage(pesuList)  -- Refresh PESU list page
+                        displayPESUPage(pagesData[currentPesuPage] or {})  -- Refresh PESU list page
                     end
                     displayNeedsRefresh = false
                 end
@@ -382,6 +452,10 @@ local function main()
                             panelDataList[senderID] = message.panelDataList[1]
                             displayNeedsRefresh = true
                             print("Processed panel data from sender ID:", senderID)
+                        elseif message.command == "reactor_status" then
+                            reactorsStatus = message.status  -- "on" or "off"
+                            displayNeedsRefresh = true
+                            print("Updated reactor status to:", reactorsStatus)
                         else
                             print("Unknown command from sender ID:", senderID)
                         end
