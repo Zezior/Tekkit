@@ -255,8 +255,19 @@ local function displayPESUPage(pesuData)
         local y = dataStartY + ((idx - 1) % pesusPerColumn) + 2  -- Adjusted Y position
         local fillPercentage = (data.stored / data.capacity) * 100
         setColorBasedOnPercentage(fillPercentage)
-        monitor.setCursorPos(x + 1, y)
-        monitor.write(string.format("PESU %d: %s", globalIdx, formatPercentage(fillPercentage)))
+
+        -- Format PESU number and percentage with fixed widths
+        local pesuNumberStr = string.format("PESU %4d:", globalIdx)
+        local percentageStr = string.format("%6.2f%%", fillPercentage)
+
+        -- Positions
+        local pesuX = x + 2  -- Adjust as needed
+        local percentageX = x + columnWidth - #percentageStr - 2  -- Adjust as needed
+
+        monitor.setCursorPos(pesuX, y)
+        monitor.write(pesuNumberStr)
+        monitor.setCursorPos(percentageX, y)
+        monitor.write(percentageStr)
     end
     monitor.setTextColor(colors.black)
 end
@@ -287,8 +298,10 @@ local function displayHomePage()
     monitor.write(leftTitle)
 
     if #pesuList == 0 then
-        monitor.setCursorPos(leftColumnX, leftColumnStartY + 2)
-        monitor.write("No PESU data available.")
+        local msg = "No PESU data available."
+        local msgX = leftColumnX + math.floor((leftColumnWidth - #msg) / 2)
+        monitor.setCursorPos(msgX, leftColumnStartY + 2)
+        monitor.write(msg)
     else
         local top10 = {}
         for idx, pesu in ipairs(pesuList) do
@@ -307,9 +320,19 @@ local function displayHomePage()
             local pesu = top10[i]
             local fillPercentage = (pesu.stored / pesu.capacity) * 100
             setColorBasedOnPercentage(fillPercentage)
-            local text = string.format("PESU %d: %s", pesu.index, formatPercentage(fillPercentage))
-            monitor.setCursorPos(leftColumnX + math.floor((leftColumnWidth - #text) / 2), leftColumnStartY + i)
-            monitor.write(text)
+
+            -- Format PESU number and percentage with fixed widths
+            local pesuNumberStr = string.format("PESU %4d:", pesu.index)
+            local percentageStr = string.format("%6.2f%%", fillPercentage)
+
+            -- Positions
+            local pesuX = leftColumnX + 2  -- Adjust as needed
+            local percentageX = leftColumnX + leftColumnWidth - #percentageStr - 2  -- Adjust as needed
+
+            monitor.setCursorPos(pesuX, leftColumnStartY + i)
+            monitor.write(pesuNumberStr)
+            monitor.setCursorPos(percentageX, leftColumnStartY + i)
+            monitor.write(percentageStr)
         end
         monitor.setTextColor(colors.black)
     end
@@ -322,8 +345,10 @@ local function displayHomePage()
 
     local panelY = rightColumnStartY + 1
     if next(panelDataList) == nil then
-        monitor.setCursorPos(rightColumnX, panelY)
-        monitor.write("No Panel data available.")
+        local msg = "Getting Power Service Stats"
+        local msgX = rightColumnX + math.floor((rightColumnWidth - #msg) / 2)
+        monitor.setCursorPos(msgX, panelY)
+        monitor.write(msg)
     else
         for senderID, panelData in pairs(panelDataList) do
             monitor.setTextColor(colors.black)
@@ -336,7 +361,7 @@ local function displayHomePage()
             monitor.write(usageText)
             panelY = panelY + 1
 
-            local fillText = "Filled: " .. formatPercentage(panelData.fillPercentage)
+            local fillText = "Filled: " .. string.format("%6.2f%%", panelData.fillPercentage)
             setColorBasedOnPercentage(panelData.fillPercentage)
             monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
             monitor.write(fillText)
@@ -346,7 +371,7 @@ local function displayHomePage()
     end
 
     -- Display reactor status above progress bar
-    local reactorStatusY = h - 8
+    local reactorStatusY = h - 9
     if reactorsStatus == "on" then
         monitor.setTextColor(colors.green)
         centerText("Reactors are ON", reactorStatusY)
@@ -359,12 +384,12 @@ local function displayHomePage()
     -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = (totalStored / totalCapacity) * 100
     local progressBarWidth = w - 4  -- Leave some padding on sides
-    local filledBars = math.floor((totalFillPercentage / 100) * progressBarWidth)
-    local emptyBars = progressBarWidth - filledBars
+    local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
+    local emptyBars = (progressBarWidth - 2) - filledBars
 
-    local progressBarY = h - 6
+    local progressBarY = h - 7
 
-    -- Draw progress bar
+    -- Draw progress bar border
     monitor.setCursorPos(3, progressBarY)
     monitor.setBackgroundColor(colors.black)
     monitor.write(string.rep(" ", progressBarWidth))  -- Top border
@@ -373,6 +398,9 @@ local function displayHomePage()
     monitor.write(" ")  -- Left border
     monitor.setCursorPos(2 + progressBarWidth, progressBarY + 1)
     monitor.write(" ")  -- Right border
+
+    monitor.setCursorPos(3, progressBarY + 2)
+    monitor.write(string.rep(" ", progressBarWidth))  -- Bottom border
 
     -- Draw filled portion
     setColorBasedOnPercentage(totalFillPercentage)
