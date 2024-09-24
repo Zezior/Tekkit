@@ -3,11 +3,15 @@
 -- Configuration
 local monitorSide = "right"     -- Adjust based on your setup
 
--- Open the ender modem on the "top" side
+-- Open the modem on the "top" side
 rednet.open("top")
 
 -- Output the computer ID
 print("Mainframe Computer ID:", os.getComputerID())
+
+-- Load allowed sender IDs from ids.lua
+local ids = dofile("ids.lua")
+local allowedSenderIDs = ids.allowedSenderIDs
 
 -- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
@@ -40,26 +44,13 @@ local panelDataList = {}  -- Stores panel data, indexed by senderID
 -- Additional variables for timing
 local lastUpdateTime = os.clock()
 
--- List of allowed sender IDs (Add the IDs of your trusted sender computers)
-local allowedSenderIDs = {4855}  -- Update this to include IDs of allowed senders
-
--- Function to format large numbers
-local function formatNumber(num)
-    if num >= 1e12 then
-        return string.format("%.2ftil", num / 1e12)
-    elseif num >= 1e9 then
-        return string.format("%.2fbil", num / 1e9)
-    elseif num >= 1e6 then
-        return string.format("%.2fmil", num / 1e6)
-    elseif num >= 1e3 then
-        return string.format("%.2fk", num / 1e3)
-    else
-        return tostring(num)
-    end
+-- Function to format percentages
+local function formatPercentage(value)
+    return string.format("%.2f%%", value)
 end
 
 -- Helper function to check if a value exists in a table
-local function tableContains(tbl, element)
+function table.contains(tbl, element)
     for _, value in pairs(tbl) do
         if value == element then
             return true
@@ -153,9 +144,7 @@ local function processPESUData()
                 totalCapacity = totalCapacity + 1000000000  -- Fixed capacity 1,000,000,000
                 table.insert(pesuList, {
                     stored = pesuData.energy,
-                    capacity = 1000000000,  -- Fixed capacity
-                    senderID = senderID,
-                    pesuName = "PESU"  -- Since IDs are not needed
+                    capacity = 1000000000  -- Fixed capacity
                 })
             end
         end
@@ -168,6 +157,7 @@ local function processPESUData()
     centerButtons()
 
     -- All PESUs on one page
+    pagesData = {}
     pagesData[1] = pesuList
 
     -- Debug print
@@ -179,7 +169,7 @@ local function displayPESUPage(pesuData)
     clearMonitorExceptButtons()
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.white)
-    monitor.write("PESU List:")
+    monitor.write("PESU List (Fill Percentage):")
 
     if #pesuData == 0 then
         monitor.setCursorPos(1, 3)
@@ -201,34 +191,17 @@ local function displayPESUPage(pesuData)
 
         monitor.setTextColor(colors.white)
         monitor.setCursorPos(x, y)
-        monitor.write(string.format("%s: %s / 1 bil", data.pesuName, formatNumber(data.stored)))
+        local fillPercentage = (data.stored / data.capacity) * 100
+        monitor.write(string.format("PESU: %s", formatPercentage(fillPercentage)))
     end
 end
 
--- Function to calculate average EU/t consumption for total PESUs
-local function calculateAverageEUT()
-    local currentTime = os.clock()
-    local deltaTime = currentTime - lastUpdateTime
-
-    if deltaTime >= 20 then  -- Calculate every 20 seconds
-        if lastEUStored then
-            local deltaEU = lastEUStored - totalStored
-            averageEUT = deltaEU / deltaTime
-            if averageEUT < 0 then
-                averageEUT = 0  -- Prevent negative values
-            end
-        end
-        lastEUStored = totalStored
-        lastUpdateTime = currentTime
-    end
-end
-
--- Display the Home Page
+-- Function to display the Home Page
 local function displayHomePage()
     clearMonitorExceptButtons()
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.white)
-    monitor.write("Top 10 Drained PESUs:")
+    monitor.write("Top 10 Drained PESUs (Fill %):")
 
     if #pesuList == 0 then
         monitor.setCursorPos(1, 3)
@@ -236,7 +209,7 @@ local function displayHomePage()
     else
         local top10 = {}
         for idx, pesu in ipairs(pesuList) do
-            table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, pesuName = pesu.pesuName})
+            table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity})
         end
 
         -- Sort PESUs by percentage drained (ascending)
@@ -251,29 +224,39 @@ local function displayHomePage()
             local pesu = top10[i]
             monitor.setTextColor(colors.white)
             monitor.setCursorPos(1, i + 2)
-            monitor.write(string.format("%s: %s / 1 bil", pesu.pesuName, formatNumber(pesu.stored)))
+            local fillPercentage = (pesu.stored / pesu.capacity) * 100
+            monitor.write(string.format("PESU: %s", formatPercentage(fillPercentage)))
         end
     end
 
     -- Display panel data
-    monitor.setCursorPos(math.floor(w / 2), 1)
+    monitor.setCursorPos(math.floor(w / 2) + 1, 1)
     monitor.write("Panel Data:")
 
-    local y = 3  -- Start below the title
-    for _, panelData in pairs(panelDataList) do
-        monitor.setCursorPos(math.floor(w / 2), y)
-        monitor.write(panelData.title or "Panel")
-        y = y + 1
+    local panelY = 3
+    if next(panelDataList) == nil then
+        monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+        monitor.write("No Panel data available.")
+    else
+        for senderID, panelData in pairs(panelDataList) do
+            monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+            monitor.write(panelData.title)
+            panelY = panelY + 1
 
-        monitor.setCursorPos(math.floor(w / 2), y)
-        monitor.write(formatNumber(panelData.energy) .. " / " .. formatNumber(panelData.capacity))
-        y = y + 2  -- Add extra space between panels
+            monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+            monitor.write(string.format("Power Usage: %.2f EU/T", panelData.energyUsage))
+            panelY = panelY + 1
+
+            monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+            monitor.write(string.format("Filled: %.2f%%", panelData.fillPercentage))
+            panelY = panelY + 2  -- Add extra space between panels
+        end
     end
 
-    -- Display total EU stored and capacity as raw values, centered above buttons
+    -- Display total fill percentage, centered above buttons
     monitor.setTextColor(colors.white)
-    centerText("Total EU Stored: " .. formatNumber(totalStored), h - 6)
-    centerText("Total EU Capacity: " .. formatNumber(totalCapacity), h - 5)
+    local totalFillPercentage = (totalStored / totalCapacity) * 100
+    centerText("Total PESUs Filled: " .. formatPercentage(totalFillPercentage), h - 6)
 end
 
 -- Main function for live page updates and data processing
@@ -290,10 +273,9 @@ local function main()
 
     -- Start data processing and page refreshing in parallel
     parallel.waitForAny(
-        function()  -- Data Processing Loop
+        function()  -- PESU Data Processing Loop
             while true do
                 processPESUData()
-                calculateAverageEUT()
                 displayNeedsRefresh = true  -- Indicate that display needs to be refreshed
                 sleep(refreshInterval)  -- Wait for the next update
             end
@@ -326,35 +308,27 @@ local function main()
             while true do
                 local event, senderID, message, protocol = os.pullEvent("rednet_message")
                 print("Received message from ID:", senderID)
-                if protocol == "pesu_data" then
-                    if type(message) == "table" and message.command == "pesu_data" then
-                        if tableContains(allowedSenderIDs, senderID) then
+                if type(message) == "table" and message.command then
+                    if table.contains(allowedSenderIDs, senderID) then
+                        if message.command == "pesu_data" then
                             -- Store the PESU data from the sender
                             pesuDataFromSenders[senderID] = message
                             processPESUData()  -- Update data processing
                             displayNeedsRefresh = true
                             print("Processed PESU data from sender ID:", senderID)
-                        else
-                            print("Ignored data from sender ID:", senderID)
-                        end
-                    else
-                        print("Warning: Received malformed PESU data from Sender ID:", senderID)
-                    end
-                elseif protocol == "panel_data" then
-                    if type(message) == "table" and message.command == "panel_data" then
-                        if tableContains(allowedSenderIDs, senderID) then
+                        elseif message.command == "panel_data" then
                             -- Store the panel data from the sender
-                            panelDataList[senderID] = message.panelDataList[1]  -- Assuming one panel per sender
+                            panelDataList[senderID] = message.panelDataList[1]
                             displayNeedsRefresh = true
                             print("Processed panel data from sender ID:", senderID)
                         else
-                            print("Ignored panel data from sender ID:", senderID)
+                            print("Unknown command from sender ID:", senderID)
                         end
                     else
-                        print("Warning: Received malformed panel data from Sender ID:", senderID)
+                        print("Ignored data from sender ID:", senderID)
                     end
                 else
-                    print("Warning: Received unknown protocol message from Sender ID:", senderID)
+                    print("Warning: Received malformed data from Sender ID:", senderID)
                 end
             end
         end
