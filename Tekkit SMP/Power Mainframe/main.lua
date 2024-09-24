@@ -6,6 +6,9 @@ local monitorSide = "right"     -- Adjust based on your setup
 -- Open the ender modem on the "top" side
 rednet.open("top")
 
+-- Output the computer ID
+print("Mainframe Computer ID:", os.getComputerID())
+
 -- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
