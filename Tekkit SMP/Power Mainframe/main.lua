@@ -37,6 +37,9 @@ local panelDataList = {}  -- Stores panel data, indexed by panelID
 -- Additional variables for timing
 local lastUpdateTime = os.clock()
 
+-- List of allowed sender IDs
+local allowedSenderIDs = {4855}
+
 -- Function to format large numbers
 local function formatNumber(num)
     if num >= 1e12 then
@@ -50,6 +53,16 @@ local function formatNumber(num)
     else
         return tostring(num)
     end
+end
+
+-- Helper function to check if a value exists in a table
+function table.contains(table, element)
+    for _, value in pairs(table) do
+        if value == element then
+            return true
+        end
+    end
+    return false
 end
 
 -- Function to center a text on the monitor screen
@@ -93,11 +106,11 @@ local function centerButtons()
     buttonList = {}  -- Reset button list
 
     -- Define Home button
-    defineButton("Home", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "home" end)
+    defineButton("Home", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "home"; displayNeedsRefresh = true end)
     startX = startX + buttonWidth + 2
 
     -- Define PESU page button
-    defineButton("PESUs", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "pesu" end)
+    defineButton("PESUs", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "pesu"; displayNeedsRefresh = true end)
 end
 
 -- Function to clear the monitor except for the buttons
@@ -154,6 +167,9 @@ local function processPESUData()
     -- All PESUs on one page
     pagesData = {}
     pagesData[1] = pesuList
+
+    -- Debug print
+    print("Processed PESU Data. Total PESUs:", #pesuList)
 end
 
 -- Function to display the PESU Page
@@ -162,6 +178,12 @@ local function displayPESUPage(pesuData)
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.white)
     monitor.write("PESU List:")
+
+    if #pesuData == 0 then
+        monitor.setCursorPos(1, 3)
+        monitor.write("No PESU data available.")
+        return
+    end
 
     local columnWidth = math.floor(w / columnsPerPage)
     local xOffsets = {}
@@ -205,6 +227,12 @@ local function displayHomePage()
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.white)
     monitor.write("Top 10 Drained PESUs:")
+
+    if #pesuList == 0 then
+        monitor.setCursorPos(1, 3)
+        monitor.write("No PESU data available.")
+        return
+    end
 
     local top10 = {}
     for idx, pesu in ipairs(pesuList) do
@@ -281,13 +309,20 @@ local function main()
         function()  -- Handle Incoming PESU Data
             while true do
                 local event, senderID, message, protocol = os.pullEvent("rednet_message")
+                print("Received message from ID:", senderID)
                 if protocol == "pesu_data" then
                     if type(message) == "table" and message.command == "pesu_data" then
-                        -- Store the PESU data from the sender
-                        pesuDataFromSenders[senderID] = message
-                        processPESUData()  -- Update data processing
+                        if table.contains(allowedSenderIDs, senderID) then
+                            -- Store the PESU data from the sender
+                            pesuDataFromSenders[senderID] = message
+                            processPESUData()  -- Update data processing
+                            displayNeedsRefresh = true
+                            print("Processed data from sender ID:", senderID)
+                        else
+                            print("Ignored data from sender ID:", senderID)
+                        end
                     else
-                        print("Warning: Received malformed data from Sender ID: " .. senderID)
+                        print("Warning: Received malformed data from Sender ID:", senderID)
                     end
                 end
             end
