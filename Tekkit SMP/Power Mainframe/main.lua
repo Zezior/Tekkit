@@ -60,12 +60,6 @@ local function centerText(text, y)
     monitor.write(text)
 end
 
--- Function to define a button
-local function defineButton(name, x, y, width, height, action)
-    table.insert(buttonList, {name = name, x = x, y = y, width = width, height = height, action = action})
-    drawButton(name, x, y, width, height, colors.blue)
-end
-
 -- Function to draw a button
 local function drawButton(label, x, y, width, height, color)
     monitor.setBackgroundColor(color)
@@ -80,6 +74,12 @@ local function drawButton(label, x, y, width, height, color)
     monitor.setCursorPos(labelX, labelY)
     monitor.write(label)
     monitor.setBackgroundColor(colors.black)
+end
+
+-- Function to define a button
+local function defineButton(name, x, y, width, height, action)
+    table.insert(buttonList, {name = name, x = x, y = y, width = width, height = height, action = action})
+    drawButton(name, x, y, width, height, colors.blue)
 end
 
 -- Function to center buttons at the bottom of the screen
