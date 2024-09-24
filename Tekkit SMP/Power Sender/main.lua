@@ -65,20 +65,16 @@ local function sendPESUData()
             -- Fixed capacity
             local capacityEU = 1000000000  -- 1,000,000,000 EU
 
-            -- Since PESU IDs are not needed, we set the title to "PESU"
-            local pesuTitle = "PESU"
-
             -- Format the energy values
             local formattedStored = formatNumber(storedEU)
 
             -- Add the PESU data to the list
             table.insert(pesuDataList, {
-                title = pesuTitle,  -- Title for the PESU
                 energy = storedEU
             })
 
             -- Debug print to confirm data
-            print("Detected PESU: " .. pesuName .. " - EU Stored: " .. formattedStored)
+            print("Detected PESU - EU Stored: " .. formattedStored)
         else
             print("Error: Could not wrap PESU: " .. pesuName)
         end

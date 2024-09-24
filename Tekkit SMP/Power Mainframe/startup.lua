@@ -4,6 +4,7 @@ local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%2
 
 local filesToUpdate = {
     "main.lua",
+    "ids.lua"
 }
 
 local function printUsage()

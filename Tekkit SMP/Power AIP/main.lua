@@ -2,21 +2,32 @@
 
 -- Configuration
 local panelSide = "top"         -- Side where the advanced information panel is connected
-local updateInterval = 5        -- Time in seconds between sending updates
-local mainframeID = 4644        -- Updated Mainframe's Rednet ID
+local mainframeID = 4644        -- Mainframe's Rednet ID
+local modemSide = "back"        -- Side where the modem is connected
+local updateInterval = 20       -- Time in seconds between sending updates
 
 -- Open the wireless modem for rednet communication
-rednet.open("back")  -- Adjust the side where your modem is connected
+rednet.open(modemSide)  -- Adjust the side where your modem is connected
+
+-- Variables to store energy readings
+local previousEnergy = nil
+local previousTime = nil
 
 -- Function to extract energy data from getCardData
 local function extractEnergy(dataLine)
-    local energyStr = dataLine:match("Energy:%s*([%d,%.]+)%s*EU")
+    local energyStr = dataLine:match("([%d%s]+)%s*EU")
     if energyStr then
-        local energyValue = tonumber((energyStr:gsub(",", "")))
+        local energyValue = tonumber((energyStr:gsub("%s", "")))
         return energyValue
     else
         return nil
     end
+end
+
+-- Function to extract fill percentage from getCardData
+local function extractFillPercentage(dataLine)
+    local percentage = tonumber(dataLine)
+    return percentage
 end
 
 -- Function to send panel data
@@ -32,37 +43,55 @@ local function sendPanelData()
     -- Get the card data from the panel
     local cardData = panelPeripheral.getCardData()
 
-    -- Debug: Print the cardData content
-    if cardData then
-        print("Card Data:")
-        for idx, line in ipairs(cardData) do
-            print(idx .. ": " .. line)
-        end
-    else
-        print("Error: cardData is nil")
-        return
-    end
-
     -- Ensure cardData is valid
-    if not cardData or #cardData < 2 then
+    if not cardData or #cardData < 5 then
         print("Error: Invalid card data received.")
         return
     end
 
-    -- Extract the panel name (1st line) and energy (2nd line)
+    -- Extract the panel name (1st line)
     local panelName = cardData[1]
-    local energyLine = cardData[2]
-    local energyValue = extractEnergy(energyLine)
+
+    -- Extract stored energy (2nd line)
+    local storedEnergy = extractEnergy(cardData[2])
+
+    -- Extract fill percentage (5th line)
+    local fillPercentage = tonumber(cardData[5])
+
+    if not panelName or not storedEnergy or not fillPercentage then
+        print("Error: Could not retrieve panel data.")
+        return
+    end
+
+    -- Calculate energy usage
+    local currentTime = os.clock()
+    local energyUsage = nil
+
+    if previousEnergy and previousTime then
+        local deltaEnergy = previousEnergy - storedEnergy  -- Energy used
+        local deltaTime = currentTime - previousTime       -- Time elapsed in seconds
+        local totalTicks = deltaTime * 20                  -- Total ticks (20 ticks per second)
+
+        if totalTicks > 0 then
+            energyUsage = deltaEnergy / totalTicks  -- EU per tick
+        else
+            energyUsage = 0
+        end
+    end
+
+    -- Update previous readings
+    previousEnergy = storedEnergy
+    previousTime = currentTime
 
     -- Prepare the message to send
-    if panelName and energyValue then
+    if energyUsage then
         local message = {
             command = "panel_data",
             panelDataList = {
                 {
                     title = panelName,
-                    energy = energyValue
-                    -- You can add more fields if needed
+                    fillPercentage = fillPercentage,
+                    energyUsage = energyUsage
                 }
             }
         }
@@ -71,9 +100,9 @@ local function sendPanelData()
         rednet.send(mainframeID, message, "panel_data")
 
         -- Debug print to confirm message sent
-        print("Sent panel data to mainframe: " .. panelName .. " - Energy: " .. energyValue)
+        print("Sent panel data to mainframe: " .. panelName .. " - Energy Usage: " .. string.format("%.2f", energyUsage) .. " EU/T - Filled: " .. fillPercentage .. "%")
     else
-        print("Error: Could not retrieve panel data.")
+        print("Waiting for next reading to calculate energy usage...")
     end
 end
 

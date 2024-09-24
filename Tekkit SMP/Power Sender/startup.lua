@@ -3,7 +3,7 @@
 local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Power%20Sender/"
 
 local filesToUpdate = {
-    "main.lua",
+    "main.lua"
 }
 
 local function printUsage()
