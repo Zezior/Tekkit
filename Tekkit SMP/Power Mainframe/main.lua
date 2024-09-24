@@ -22,9 +22,8 @@ local refreshInterval = 2  -- Refresh PESU data every 2 seconds
 local totalStored, totalCapacity = 0, 0  -- Store totals
 local pesusPerColumn = 25  -- Number of PESUs per column
 local columnsPerPage = 4   -- Number of columns per page
-local pesusPerPage = pesusPerColumn * columnsPerPage  -- Total PESUs per page
 local pesuList = {}  -- List of all PESUs
-local numPesuPages = 1  -- Number of PESU pages
+local numPesuPages = 1  -- Number of PESU pages is 1
 local lastSentState = nil  -- Track the last sent state to prevent spamming messages
 
 -- Variables for tracking PESU data from sender computers
@@ -53,25 +52,18 @@ local function formatNumber(num)
     end
 end
 
--- Function to format percentage values
-local function formatPercentage(value, max)
-    if max == 0 then return "0.00%" end
-    return string.format("%.2f%%", (value / max) * 100)
+-- Function to center a text on the monitor screen
+local function centerText(text, y)
+    local x = math.floor((w - #text) / 2) + 1
+    if x < 1 then x = 1 end
+    monitor.setCursorPos(x, y)
+    monitor.write(text)
 end
 
--- Function to set color based on percentage
-local function setColorBasedOnPercentage(percentage)
-    if percentage >= 0.10 then
-        monitor.setTextColor(colors.blue)
-    elseif percentage >= 0.07 then
-        monitor.setTextColor(colors.green)
-    elseif percentage >= 0.05 then
-        monitor.setTextColor(colors.yellow)
-    elseif percentage >= 0.03 then
-        monitor.setTextColor(colors.orange)
-    else
-        monitor.setTextColor(colors.red)
-    end
+-- Function to define a button
+local function defineButton(name, x, y, width, height, action)
+    table.insert(buttonList, {name = name, x = x, y = y, width = width, height = height, action = action})
+    drawButton(name, x, y, width, height, colors.blue)
 end
 
 -- Function to draw a button
@@ -90,17 +82,11 @@ local function drawButton(label, x, y, width, height, color)
     monitor.setBackgroundColor(colors.black)
 end
 
--- Function to define a button
-local function defineButton(name, x, y, width, height, action)
-    table.insert(buttonList, {name = name, x = x, y = y, width = width, height = height, action = action})
-    drawButton(name, x, y, width, height, colors.blue)
-end
-
 -- Function to center buttons at the bottom of the screen
 local function centerButtons()
     local buttonWidth = 10  -- Width of each button
     local buttonHeight = 3  -- Height of each button
-    local totalButtons = numPesuPages + 1  -- Home button + PESU pages
+    local totalButtons = 2  -- Home button + PESU page
     local totalWidth = totalButtons * buttonWidth + (totalButtons - 1) * 2
     local startX = math.floor((w - totalWidth) / 2) + 1
 
@@ -110,12 +96,8 @@ local function centerButtons()
     defineButton("Home", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "home" end)
     startX = startX + buttonWidth + 2
 
-    -- Define PESU page buttons
-    for i = 1, numPesuPages do
-        local label = "PESUs " .. i
-        defineButton(label, startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "pesu" .. i end)
-        startX = startX + buttonWidth + 2
-    end
+    -- Define PESU page button
+    defineButton("PESUs", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function() page = "pesu" end)
 end
 
 -- Function to clear the monitor except for the buttons
@@ -151,34 +133,51 @@ local function processPESUData()
         -- Process PESU data
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
-                totalStored = totalStored + pesuData.energy  -- Assuming 'energy' is stored EU
-                totalCapacity = totalCapacity + pesuData.capacity
+                totalStored = totalStored + pesuData.energy  -- Stored EU
+                totalCapacity = totalCapacity + 1000000000  -- Fixed capacity 1,000,000,000
                 table.insert(pesuList, {
-                    stored = pesuData.energy,  -- Aligning with sender's 'energy' field
-                    capacity = pesuData.capacity,
+                    stored = pesuData.energy,
+                    capacity = 1000000000,  -- Fixed capacity
                     senderID = senderID,
-                    pesuName = pesuData.title  -- Assuming 'title' is the name
+                    pesuName = pesuData.title  -- PESU Name (e.g., "PESU 172")
                 })
             end
         end
     end
 
-    -- Update the number of PESU pages
-    numPesuPages = math.ceil(#pesuList / pesusPerPage)
-    if numPesuPages < 1 then numPesuPages = 1 end
+    -- All PESUs on one page
+    numPesuPages = 1
 
     -- Recalculate button positions
     centerButtons()
 
-    -- Split PESUs into pages
+    -- All PESUs on one page
     pagesData = {}
-    for i = 1, numPesuPages do
-        local startIdx = (i - 1) * pesusPerPage + 1
-        local endIdx = math.min(i * pesusPerPage, #pesuList)
-        pagesData[i] = {}
-        for j = startIdx, endIdx do
-            table.insert(pagesData[i], pesuList[j])
-        end
+    pagesData[1] = pesuList
+end
+
+-- Function to display the PESU Page
+local function displayPESUPage(pesuData)
+    clearMonitorExceptButtons()
+    monitor.setCursorPos(1, 1)
+    monitor.setTextColor(colors.white)
+    monitor.write("PESU List:")
+
+    local columnWidth = math.floor(w / columnsPerPage)
+    local xOffsets = {}
+    for i = 1, columnsPerPage do
+        xOffsets[i] = (i - 1) * columnWidth + 1
+    end
+
+    for idx, data in ipairs(pesuData) do
+        local column = math.ceil(idx / pesusPerColumn)
+        if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
+        local x = xOffsets[column]
+        local y = ((idx - 1) % pesusPerColumn) + 3
+
+        monitor.setTextColor(colors.white)
+        monitor.setCursorPos(x, y)
+        monitor.write(string.format("%s: %s / 1 bil", data.pesuName, formatNumber(data.stored)))
     end
 end
 
@@ -200,41 +199,7 @@ local function calculateAverageEUT()
     end
 end
 
--- Function to display the PESU Page with percentages and split into columns
-local function displayPESUPage(pesuData, pageIndex)
-    clearMonitorExceptButtons()
-    monitor.setCursorPos(1, 1)
-    monitor.setTextColor(colors.white)
-    monitor.write(string.format("PESU List - Page %d:", pageIndex))
-
-    local columnWidth = math.floor(w / columnsPerPage)
-    local xOffsets = {}
-    for i = 1, columnsPerPage do
-        xOffsets[i] = (i - 1) * columnWidth + 1
-    end
-
-    for idx, data in ipairs(pesuData) do
-        local column = math.ceil(idx / pesusPerColumn)
-        if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
-        local x = xOffsets[column]
-        local y = ((idx - 1) % pesusPerColumn) + 3
-
-        local percentage = data.stored / data.capacity
-        setColorBasedOnPercentage(percentage)
-        monitor.setCursorPos(x, y)
-        monitor.write(string.format("%s: %s", data.pesuName, formatPercentage(data.stored, data.capacity)))
-    end
-end
-
--- Function to center a text on the monitor screen
-local function centerText(text, y)
-    local x = math.floor((w - #text) / 2) + 1
-    if x < 1 then x = 1 end
-    monitor.setCursorPos(x, y)
-    monitor.write(text)
-end
-
--- Display the Home Page with top 10 drained PESUs and "Power Service Stats" column
+-- Display the Home Page
 local function displayHomePage()
     clearMonitorExceptButtons()
     monitor.setCursorPos(1, 1)
@@ -243,7 +208,7 @@ local function displayHomePage()
 
     local top10 = {}
     for idx, pesu in ipairs(pesuList) do
-        table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, pesuNum = idx})
+        table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, pesuName = pesu.pesuName})
     end
 
     -- Sort PESUs by percentage drained (ascending)
@@ -256,37 +221,9 @@ local function displayHomePage()
     -- Display top 10
     for i = 1, math.min(10, #top10) do
         local pesu = top10[i]
-        local percentage = pesu.stored / pesu.capacity
-        setColorBasedOnPercentage(percentage)
+        monitor.setTextColor(colors.white)
         monitor.setCursorPos(1, i + 2)
-        monitor.write(string.format("PESU %d: %s", pesu.pesuNum, formatPercentage(pesu.stored, pesu.capacity)))
-    end
-
-    -- Display "Power Service Stats" title
-    monitor.setTextColor(colors.white)
-    local powerUsageX = math.floor(w / 2) + 1
-    monitor.setCursorPos(powerUsageX, 1)
-    monitor.write("Power Service Stats")
-
-    local y = 3  -- Start below the title
-
-    -- Display panel data
-    for _, panelData in pairs(panelDataList) do
-        monitor.setCursorPos(powerUsageX, y)
-        monitor.write(panelData.title or "Panel")
-        y = y + 1
-
-        monitor.setCursorPos(powerUsageX, y)
-        monitor.write(formatNumber(panelData.energy) .. " / " .. formatNumber(panelData.capacity))
-        y = y + 1
-
-        monitor.setCursorPos(powerUsageX, y)
-        if panelData.averageEUT then
-            monitor.write("Usage: " .. string.format("%.2f EU/t", panelData.averageEUT))
-        else
-            monitor.write("Usage: Calculating...")
-        end
-        y = y + 2  -- Add extra space between panels
+        monitor.write(string.format("%s: %s / 1 bil", pesu.pesuName, formatNumber(pesu.stored)))
     end
 
     -- Display total EU stored and capacity as raw values, centered above buttons
@@ -322,11 +259,8 @@ local function main()
                 if displayNeedsRefresh then
                     if page == "home" then
                         displayHomePage()  -- Refresh homepage with live data
-                    else
-                        local pageIndex = tonumber(page:match("pesu(%d+)"))
-                        if pageIndex and pagesData[pageIndex] then
-                            displayPESUPage(pagesData[pageIndex], pageIndex)  -- Refresh PESU list page
-                        end
+                    elseif page == "pesu" then
+                        displayPESUPage(pesuList)  -- Refresh PESU list page
                     end
                     displayNeedsRefresh = false
                 end

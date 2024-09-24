@@ -32,7 +32,7 @@ local function detectPESUs()
 
     -- Loop through the peripheral names to find PESUs
     for _, name in ipairs(peripheralNames) do
-        -- Check if the peripheral is a PESU (assuming the type starts with 'ic2:pesu')
+        -- Check if the peripheral is a PESU (assuming the type contains 'pesu')
         if peripheral.getType(name):find("pesu") then
             table.insert(pesuList, name)
         end
@@ -59,33 +59,26 @@ local function sendPESUData()
         local pesuPeripheral = peripheral.wrap(pesuName)
 
         if pesuPeripheral then
-            -- Retrieve EUStored, EUOutput, and EUCapacity values
+            -- Retrieve EUStored
             local storedEU = pesuPeripheral.getEUStored and pesuPeripheral.getEUStored() or 0
-            local outputEU = pesuPeripheral.getEUOutput and pesuPeripheral.getEUOutput() or 0
-            local capacityEU = pesuPeripheral.getEUCapacity and pesuPeripheral.getEUCapacity() or 0
 
-            if storedEU > 0 and capacityEU > 0 then
-                -- Format the energy values
-                local formattedStored = formatNumber(storedEU)
-                local formattedCapacity = formatNumber(capacityEU)
-                local formattedOutput = formatNumber(outputEU)
+            -- Fixed capacity
+            local capacityEU = 1000000000  -- 1,000,000,000 EU
 
-                -- Add the PESU data to the list
-                table.insert(pesuDataList, {
-                    title = "PESU " .. pesuName,  -- Title for the PESU
-                    energy = storedEU,
-                    formattedEnergy = formattedStored,
-                    capacity = capacityEU,
-                    formattedCapacity = formattedCapacity,
-                    euOutput = outputEU,
-                    formattedOutput = formattedOutput
-                })
+            -- Extract PESU ID from the pesuName
+            local pesuID = pesuName:match("ic2:pesu_(%d+)") or pesuName
 
-                -- Debug print to confirm data
-                print("Detected PESU: " .. pesuName .. " - EU Stored: " .. formattedStored .. " EU Output: " .. formattedOutput)
-            else
-                print("Error: Could not retrieve data from PESU: " .. pesuName)
-            end
+            -- Format the energy values
+            local formattedStored = formatNumber(storedEU)
+
+            -- Add the PESU data to the list
+            table.insert(pesuDataList, {
+                title = "PESU " .. pesuID,  -- Title for the PESU
+                energy = storedEU
+            })
+
+            -- Debug print to confirm data
+            print("Detected PESU: " .. pesuName .. " - EU Stored: " .. formattedStored)
         else
             print("Error: Could not wrap PESU: " .. pesuName)
         end
