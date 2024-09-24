@@ -18,7 +18,7 @@ local monitor = peripheral.wrap(monitorSide)
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
 
 -- Clear the monitor fully on startup
-monitor.setBackgroundColor(colors.white)
+monitor.setBackgroundColor(colors.lightBlue)
 monitor.clear()
 
 local buttonList = {}  -- Store buttons for click detection
@@ -89,7 +89,7 @@ end
 -- Function to draw a button
 local function drawButton(label, x, y, width, height, color)
     monitor.setBackgroundColor(color)
-    monitor.setTextColor(colors.white)
+    monitor.setTextColor(colors.lightBlue)
     for i = 0, height - 1 do
         monitor.setCursorPos(x, y + i)
         monitor.write(string.rep(" ", width))
@@ -99,7 +99,7 @@ local function drawButton(label, x, y, width, height, color)
     local labelY = y + math.floor(height / 2)
     monitor.setCursorPos(labelX, labelY)
     monitor.write(label)
-    monitor.setBackgroundColor(colors.white)
+    monitor.setBackgroundColor(colors.lightBlue)
 end
 
 -- Function to define a button
@@ -158,7 +158,7 @@ end
 
 -- Function to clear the monitor except for the buttons
 local function clearMonitorExceptButtons()
-    monitor.setBackgroundColor(colors.white)
+    monitor.setBackgroundColor(colors.lightBlue)
     monitor.clear()
     -- Redraw buttons after clearing the screen
     for _, button in ipairs(buttonList) do
@@ -413,14 +413,14 @@ local function displayHomePage()
     monitor.write(string.rep(" ", filledBars))
 
     -- Write percentage over the progress bar
-    monitor.setBackgroundColor(colors.white)
+    monitor.setBackgroundColor(colors.lightBlue)
     monitor.setTextColor(colors.black)
     local percentageText = formatPercentage(totalFillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
     monitor.setCursorPos(percentageX, progressBarY + 1)
     monitor.write(percentageText)
 
-    monitor.setBackgroundColor(colors.white)
+    monitor.setBackgroundColor(colors.lightBlue)
     monitor.setTextColor(colors.black)
 end
 
@@ -431,7 +431,7 @@ local function main()
     centerButtons()  -- Center the buttons at the start
 
     -- Clear the monitor fully on startup
-    monitor.setBackgroundColor(colors.white)
+    monitor.setBackgroundColor(colors.lightBlue)
     monitor.clear()
 
     local displayNeedsRefresh = true  -- Flag to indicate display needs refresh
