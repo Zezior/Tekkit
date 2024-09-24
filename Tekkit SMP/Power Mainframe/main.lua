@@ -234,12 +234,19 @@ local function displayHomePage()
     centerText("NuclearCity Power Facility", titleY)
     monitor.setTextColor(colors.white)
 
-    -- Left Column Title
-    monitor.setCursorPos(1, leftColumnStartY)
-    monitor.write("Most drained")
+    local leftColumnWidth = math.floor(w / 2)
+    local rightColumnWidth = w - leftColumnWidth - 1
+    local leftColumnX = 1
+    local rightColumnX = leftColumnWidth + 2
+
+    -- Left Column Title centered in left half
+    local leftTitle = "Most drained"
+    local leftTitleX = leftColumnX + math.floor((leftColumnWidth - #leftTitle) / 2)
+    monitor.setCursorPos(leftTitleX, leftColumnStartY)
+    monitor.write(leftTitle)
 
     if #pesuList == 0 then
-        monitor.setCursorPos(1, leftColumnStartY + 2)
+        monitor.setCursorPos(leftColumnX, leftColumnStartY + 2)
         monitor.write("No PESU data available.")
     else
         local top10 = {}
@@ -259,42 +266,58 @@ local function displayHomePage()
             local pesu = top10[i]
             local fillPercentage = (pesu.stored / pesu.capacity) * 100
             setColorBasedOnPercentage(fillPercentage)
-            monitor.setCursorPos(1, leftColumnStartY + i)
+            monitor.setCursorPos(leftColumnX + 2, leftColumnStartY + i)
             monitor.write(string.format("PESU: %s", formatPercentage(fillPercentage)))
         end
+        monitor.setTextColor(colors.white)
     end
 
-    -- Right Column Title
-    monitor.setCursorPos(math.floor(w / 2) + 1, rightColumnStartY)
-    monitor.write("NuclearCity Power Service")
+    -- Right Column Title centered in right half
+    local rightTitle = "NuclearCity Power Service"
+    local rightTitleX = rightColumnX + math.floor((rightColumnWidth - #rightTitle) / 2)
+    monitor.setCursorPos(rightTitleX, rightColumnStartY)
+    monitor.write(rightTitle)
 
     local panelY = rightColumnStartY + 1
     if next(panelDataList) == nil then
-        monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+        monitor.setCursorPos(rightColumnX, panelY)
         monitor.write("No Panel data available.")
     else
         for senderID, panelData in pairs(panelDataList) do
-            monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+            monitor.setTextColor(colors.white)
+            monitor.setCursorPos(rightColumnX + 2, panelY)
             monitor.write(panelData.title)
             panelY = panelY + 1
 
-            monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+            monitor.setCursorPos(rightColumnX + 2, panelY)
             monitor.write(string.format("Power Usage: %.2f EU/T", panelData.energyUsage))
             panelY = panelY + 1
 
-            monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+            monitor.setCursorPos(rightColumnX + 2, panelY)
             setColorBasedOnPercentage(panelData.fillPercentage)
-            monitor.write(string.format("Filled: %.2f%%", panelData.fillPercentage))
+            monitor.write(string.format("Filled: %s", formatPercentage(panelData.fillPercentage)))
             panelY = panelY + 2  -- Add extra space between panels
-            monitor.setTextColor(colors.white)
         end
+        monitor.setTextColor(colors.white)
     end
 
-    -- Display total fill percentage, centered above buttons
+    -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = (totalStored / totalCapacity) * 100
+    local progressBarWidth = w - 4  -- Leave some padding on sides
+    local filledBars = math.floor((totalFillPercentage / 100) * progressBarWidth)
+    local emptyBars = progressBarWidth - filledBars
+
+    local progressBar = string.rep("|", filledBars) .. string.rep(" ", emptyBars)
+    local progressBarY = h - 6
     setColorBasedOnPercentage(totalFillPercentage)
-    centerText("Total PESUs Filled: " .. formatPercentage(totalFillPercentage), h - 6)
+    monitor.setCursorPos(3, progressBarY)
+    monitor.write(progressBar)
     monitor.setTextColor(colors.white)
+    -- Write percentage over the progress bar
+    local percentageText = formatPercentage(totalFillPercentage)
+    local percentageX = math.floor((w - #percentageText) / 2) + 1
+    monitor.setCursorPos(percentageX, progressBarY)
+    monitor.write(percentageText)
 end
 
 -- Main function for live page updates and data processing
