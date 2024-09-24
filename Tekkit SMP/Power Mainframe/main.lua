@@ -67,6 +67,21 @@ local function centerText(text, y)
     monitor.write(text)
 end
 
+-- Function to set color based on percentage
+local function setColorBasedOnPercentage(percentage)
+    if percentage >= 100 then
+        monitor.setTextColor(colors.blue)
+    elseif percentage >= 80 then
+        monitor.setTextColor(colors.green)
+    elseif percentage >= 50 then
+        monitor.setTextColor(colors.yellow)
+    elseif percentage >= 20 then
+        monitor.setTextColor(colors.orange)
+    else
+        monitor.setTextColor(colors.red)
+    end
+end
+
 -- Function to draw a button
 local function drawButton(label, x, y, width, height, color)
     monitor.setBackgroundColor(color)
@@ -167,12 +182,21 @@ end
 -- Function to display the PESU Page
 local function displayPESUPage(pesuData)
     clearMonitorExceptButtons()
-    monitor.setCursorPos(1, 1)
+
+    -- Adjusted positions
+    local titleY = 1
+    local dataStartY = 3  -- Start data display from line 3
+
+    -- Centered Title
+    monitor.setTextColor(colors.green)
+    centerText("NuclearCity Power Facility", titleY)
     monitor.setTextColor(colors.white)
+
+    monitor.setCursorPos(1, dataStartY)
     monitor.write("PESU List (Fill Percentage):")
 
     if #pesuData == 0 then
-        monitor.setCursorPos(1, 3)
+        monitor.setCursorPos(1, dataStartY + 2)
         monitor.write("No PESU data available.")
         return
     end
@@ -187,24 +211,35 @@ local function displayPESUPage(pesuData)
         local column = math.ceil(idx / pesusPerColumn)
         if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
-        local y = ((idx - 1) % pesusPerColumn) + 3
-
-        monitor.setTextColor(colors.white)
-        monitor.setCursorPos(x, y)
+        local y = dataStartY + ((idx - 1) % pesusPerColumn) + 2  -- Adjusted Y position
         local fillPercentage = (data.stored / data.capacity) * 100
+        setColorBasedOnPercentage(fillPercentage)
+        monitor.setCursorPos(x, y)
         monitor.write(string.format("PESU: %s", formatPercentage(fillPercentage)))
     end
+    monitor.setTextColor(colors.white)
 end
 
 -- Function to display the Home Page
 local function displayHomePage()
     clearMonitorExceptButtons()
-    monitor.setCursorPos(1, 1)
+
+    -- Adjusted positions
+    local titleY = 1
+    local leftColumnStartY = 4
+    local rightColumnStartY = 4
+
+    -- Centered Title with green font
+    monitor.setTextColor(colors.green)
+    centerText("NuclearCity Power Facility", titleY)
     monitor.setTextColor(colors.white)
-    monitor.write("Top 10 Drained PESUs (Fill %):")
+
+    -- Left Column Title
+    monitor.setCursorPos(1, leftColumnStartY)
+    monitor.write("Most drained")
 
     if #pesuList == 0 then
-        monitor.setCursorPos(1, 3)
+        monitor.setCursorPos(1, leftColumnStartY + 2)
         monitor.write("No PESU data available.")
     else
         local top10 = {}
@@ -222,18 +257,18 @@ local function displayHomePage()
         -- Display top 10
         for i = 1, math.min(10, #top10) do
             local pesu = top10[i]
-            monitor.setTextColor(colors.white)
-            monitor.setCursorPos(1, i + 2)
             local fillPercentage = (pesu.stored / pesu.capacity) * 100
+            setColorBasedOnPercentage(fillPercentage)
+            monitor.setCursorPos(1, leftColumnStartY + i)
             monitor.write(string.format("PESU: %s", formatPercentage(fillPercentage)))
         end
     end
 
-    -- Display panel data
-    monitor.setCursorPos(math.floor(w / 2) + 1, 1)
-    monitor.write("Panel Data:")
+    -- Right Column Title
+    monitor.setCursorPos(math.floor(w / 2) + 1, rightColumnStartY)
+    monitor.write("NuclearCity Power Service")
 
-    local panelY = 3
+    local panelY = rightColumnStartY + 1
     if next(panelDataList) == nil then
         monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
         monitor.write("No Panel data available.")
@@ -248,15 +283,18 @@ local function displayHomePage()
             panelY = panelY + 1
 
             monitor.setCursorPos(math.floor(w / 2) + 1, panelY)
+            setColorBasedOnPercentage(panelData.fillPercentage)
             monitor.write(string.format("Filled: %.2f%%", panelData.fillPercentage))
             panelY = panelY + 2  -- Add extra space between panels
+            monitor.setTextColor(colors.white)
         end
     end
 
     -- Display total fill percentage, centered above buttons
-    monitor.setTextColor(colors.white)
     local totalFillPercentage = (totalStored / totalCapacity) * 100
+    setColorBasedOnPercentage(totalFillPercentage)
     centerText("Total PESUs Filled: " .. formatPercentage(totalFillPercentage), h - 6)
+    monitor.setTextColor(colors.white)
 end
 
 -- Main function for live page updates and data processing
