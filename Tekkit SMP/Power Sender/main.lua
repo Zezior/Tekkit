@@ -3,7 +3,7 @@
 -- Configuration
 local wirelessModemSide = "top"    -- Side where the wireless modem is attached
 local updateInterval = 5           -- Time in seconds between sending updates
-local mainframeID = 4591           -- Mainframe's Rednet ID
+-- local mainframeID = 4591           -- Removed since we're broadcasting
 
 -- Open the wireless modem for rednet communication
 rednet.open(wirelessModemSide)
@@ -91,8 +91,8 @@ local function sendPESUData()
             pesuDataList = pesuDataList
         }
 
-        rednet.send(mainframeID, message, "pesu_data")
-        print("Sent PESU data to mainframe.")
+        rednet.broadcast(message, "pesu_data")
+        print("Broadcasted PESU data.")
     end
 end
 
