@@ -108,7 +108,7 @@ end
 
 -- Compute the number of reactor pages
 local totalReactors = #reactorIDs
-local reactorsPerPage = 8
+local reactorsPerPage = 18
 local numReactorPages = math.ceil(totalReactors / reactorsPerPage)
 
 -- Build pages list
