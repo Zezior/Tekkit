@@ -99,6 +99,30 @@ local function saveReactorOutputLog()
     end
 end
 
+-- Function to load the last power command from file
+local function loadLastPowerCommand()
+    if fs.exists("power_log.txt") then
+        local file = fs.open("power_log.txt", "r")
+        if file then
+            local lastCommand = file.readAll()
+            file.close()
+            if lastCommand == "turn_on_reactors" or lastCommand == "turn_off_reactors" then
+                return lastCommand
+            end
+        end
+    end
+    return nil
+end
+
+-- Function to save the last power command to file
+local function saveLastPowerCommand(command)
+    local file = fs.open("power_log.txt", "w")
+    if file then
+        file.write(command)
+        file.close()
+    end
+end
+
 -- Function to request data from all reactors on startup
 local function requestReactorData()
     for _, reactor in pairs(reactorTable) do
@@ -210,6 +234,30 @@ local function handleActivityCheckMessage(message)
     elseif message.command == "check_players" then
         -- Send player online status to the requester
         rednet.send(activityCheckID, {playersOnline = anyPlayerOnline}, "player_status")
+    elseif message.playersOnline ~= nil then
+        -- Received player status
+        anyPlayerOnline = message.playersOnline
+        print("Received player status from activity check computer. Players online:", anyPlayerOnline)
+        -- After updating player status, check if we need to turn on reactors
+        if anyPlayerOnline and reactorsOnDueToPESU then
+            -- Turn on reactors
+            for _, reactor in pairs(reactorTable) do
+                local id = reactor.id
+                local state = repo.get(id .. "_state")
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+                if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+                    if not state then
+                        repo.set(id .. "_state", true)
+                        rednet.send(id, {command = "turn_on"})
+                    end
+                end
+            end
+            sendReactorStatus("on")
+            -- Update the display
+            if currentPage == "home" then
+                ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+            end
+        end
     else
         print("Unknown command from activity check computer:", message.command)
     end
@@ -220,6 +268,7 @@ local function handlePowerMainframeMessage(message)
     if message.command == "turn_on_reactors" then
         print("Received turn_on_reactors command from power mainframe.")
         reactorsOnDueToPESU = true
+        saveLastPowerCommand("turn_on_reactors")
         -- Turn on reactors only if players are online
         if anyPlayerOnline then
             for _, reactor in pairs(reactorTable) do
@@ -235,11 +284,12 @@ local function handlePowerMainframeMessage(message)
             end
             sendReactorStatus("on")
         else
-            print("Players are offline. Reactors will not be turned on.")
+            print("Players are offline. Reactors will turn on when a player comes online.")
         end
     elseif message.command == "turn_off_reactors" then
         print("Received turn_off_reactors command from power mainframe.")
         reactorsOnDueToPESU = false
+        saveLastPowerCommand("turn_off_reactors")
         -- Turn off all reactors
         for _, reactor in pairs(reactorTable) do
             local id = reactor.id
@@ -264,6 +314,27 @@ end
 local function main()
     -- Load reactor output log
     loadReactorOutputLog()
+
+    -- Load last power command and act accordingly
+    local lastPowerCommand = loadLastPowerCommand()
+    if lastPowerCommand == "turn_on_reactors" then
+        reactorsOnDueToPESU = true
+        -- Request player status from Activity Check Computer
+        rednet.send(activityCheckID, {command = "check_players"}, "player_status")
+        -- Reactors will turn on if players are online (handled in handleActivityCheckMessage)
+    elseif lastPowerCommand == "turn_off_reactors" then
+        reactorsOnDueToPESU = false
+        -- Ensure reactors are off
+        for _, reactor in pairs(reactorTable) do
+            local id = reactor.id
+            local state = repo.get(id .. "_state")
+            if state then
+                repo.set(id .. "_state", false)
+                rednet.send(id, {command = "turn_off"})
+            end
+        end
+        sendReactorStatus("off")
+    end
 
     -- Display the home page initially
     ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
@@ -321,11 +392,10 @@ local function main()
             -- Continuously receive messages
             while true do
                 local senderID, message, protocol = rednet.receive()
-                if senderID == activityCheckID then
+                if protocol == "player_status" and senderID == activityCheckID then
                     -- Handle messages from the activity check computer
-                    message.senderID = senderID
                     handleActivityCheckMessage(message)
-                elseif senderID == powerMainframeID then
+                elseif protocol == "reactor_control" and senderID == powerMainframeID then
                     -- Handle messages from the power mainframe
                     handlePowerMainframeMessage(message)
                 elseif isReactorID(senderID) then
