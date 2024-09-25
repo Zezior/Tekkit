@@ -107,9 +107,10 @@ local function drawButton(label, x, y, width, height, color)
 end
 
 -- Function to define a button
-local function defineButton(name, x, y, width, height, action)
-    table.insert(buttonList, {name = name, x = x, y = y, width = width, height = height, action = action})
-    drawButton(name, x, y, width, height, colors.blue)
+local function defineButton(name, x, y, width, height, action, color)
+    color = color or colors.blue  -- Default color is blue
+    table.insert(buttonList, {name = name, x = x, y = y, width = width, height = height, action = action, color = color})
+    drawButton(name, x, y, width, height, color)
 end
 
 -- Function to center buttons at the bottom of the screen
@@ -117,7 +118,7 @@ local function centerButtons()
     local buttonWidth = 10  -- Width of each button
     local buttonHeight = 3  -- Height of each button
     local totalButtons = 2  -- Home button + PESU page
-    if numPesuPages > 1 then
+    if numPesuPages > 1 and page == "pesu" then
         totalButtons = totalButtons + 2  -- Add Previous and Next buttons
     end
     local totalWidth = totalButtons * buttonWidth + (totalButtons - 1) * 2
@@ -126,18 +127,22 @@ local function centerButtons()
     buttonList = {}  -- Reset button list
 
     -- Define Home button
+    local homeButtonColor = (page == "home") and colors.green or colors.blue
     defineButton("Home", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
         page = "home"
         displayNeedsRefresh = true
-    end)
+        centerButtons()
+    end, homeButtonColor)
     startX = startX + buttonWidth + 2
 
     -- Define PESU page button
+    local pesuButtonColor = (page == "pesu") and colors.green or colors.blue
     defineButton("PESUs", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
         page = "pesu"
         currentPesuPage = 1
         displayNeedsRefresh = true
-    end)
+        centerButtons()
+    end, pesuButtonColor)
     startX = startX + buttonWidth + 2
 
     if page == "pesu" and numPesuPages > 1 then
@@ -166,7 +171,7 @@ local function clearMonitorExceptButtons()
     monitor.clear()
     -- Redraw buttons after clearing the screen
     for _, button in ipairs(buttonList) do
-        drawButton(button.name, button.x, button.y, button.width, button.height, colors.blue)
+        drawButton(button.name, button.x, button.y, button.width, button.height, button.color)
     end
 end
 
@@ -456,6 +461,7 @@ local function main()
         function()  -- UI Loop for Live Page Updates
             while true do
                 if displayNeedsRefresh then
+                    centerButtons()  -- Update buttons based on current page
                     if page == "home" then
                         displayHomePage()  -- Refresh homepage with live data
                     elseif page == "pesu" then

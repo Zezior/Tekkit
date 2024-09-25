@@ -2,10 +2,14 @@
 
 local monitor = peripheral.wrap("right")
 
+-- Custom background color
+local bgColor = colors.brown  -- Using 'colors.brown' as the slot for custom color
+monitor.setPaletteColor(bgColor, 18 / 255, 53 / 255, 36 / 255)  -- RGB values for #123524
+
 local style = {
     -- Define global theme colors
-    backgroundColor = colors.white,       -- Background color
-    textColor = colors.black,             -- Default text color
+    backgroundColor = bgColor,            -- Set to custom background color
+    textColor = colors.white,             -- Changed to white text for contrast
     headerColor = colors.orange,          -- Header text color
     buttonColor = colors.blue,            -- Default button color
     buttonTextColor = colors.white,       -- Button text color

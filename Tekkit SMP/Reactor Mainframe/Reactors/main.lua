@@ -13,6 +13,7 @@ local minReactorID = reactorIDs[1] or 0
 
 local currentPage = "home"  -- Start on the home page
 local reactors = {}  -- Table to store reactor data
+local reactorOutputLog = {}  -- Table to store reactor output data
 
 -- Initialize the repo for managing reactor states
 local repo = {
@@ -70,6 +71,34 @@ for _, reactor in pairs(reactorTable) do
     }
 end
 
+-- Function to load reactor output log from file
+local function loadReactorOutputLog()
+    if fs.exists("Reactor_log.txt") then
+        local file = fs.open("Reactor_log.txt", "r")
+        if file then
+            local content = file.readAll()
+            file.close()
+            local data = textutils.unserialize(content)
+            if data then
+                reactorOutputLog = data
+            else
+                reactorOutputLog = {}
+            end
+        end
+    else
+        reactorOutputLog = {}
+    end
+end
+
+-- Function to save reactor output log to file
+local function saveReactorOutputLog()
+    local file = fs.open("Reactor_log.txt", "w")
+    if file then
+        file.write(textutils.serialize(reactorOutputLog))
+        file.close()
+    end
+end
+
 -- Function to request data from all reactors on startup
 local function requestReactorData()
     for _, reactor in pairs(reactorTable) do
@@ -109,7 +138,7 @@ local function switchPage(page)
     if pages[page] then
         currentPage = page
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
         elseif string.sub(currentPage, 1, 7) == "reactor" then
             -- Extract page number
             local pageNumString = string.sub(currentPage, 8)
@@ -148,7 +177,7 @@ local function handleActivityCheckMessage(message)
         end
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
         end
     elseif message.command == "player_offline" then
         print("Received player_offline command from activity check computer.")
@@ -164,7 +193,7 @@ local function handleActivityCheckMessage(message)
         end
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
         end
     elseif message.command == "check_players" then
         -- Send player online status to the requester
@@ -213,14 +242,17 @@ local function handlePowerMainframeMessage(message)
 
     -- Update the display
     if currentPage == "home" then
-        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
     end
 end
 
 -- Main function for receiving reactor data and handling button presses
 local function main()
+    -- Load reactor output log
+    loadReactorOutputLog()
+
     -- Display the home page initially
-    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
 
     -- Bind reactor buttons using repo
     ui.bindReactorButtons(reactorTable, repo)
@@ -297,6 +329,21 @@ local function main()
                             end
                         end
 
+                        -- Save reactor output if euOutput > 1 and not already stored
+                        if not reactors[message.id].destroyed then
+                            local euOutputNum = tonumber(message.euOutput)
+                            if euOutputNum and euOutputNum > 1 then
+                                if not reactorOutputLog[message.id] then
+                                    reactorOutputLog[message.id] = {
+                                        reactorName = message.reactorName,
+                                        maxOutput = euOutputNum
+                                    }
+                                    saveReactorOutputLog()
+                                    print("Stored reactor output for ID:", message.id)
+                                end
+                            end
+                        end
+
                         -- Update display if on reactor page
                         local index = 0
                         for idx, rid in ipairs(reactorIDs) do
@@ -312,7 +359,7 @@ local function main()
 
                         -- Update home page if necessary
                         if currentPage == "home" then
-                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages)
+                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
                         end
                     else
                         print("Invalid message received from reactor ID:", senderID)

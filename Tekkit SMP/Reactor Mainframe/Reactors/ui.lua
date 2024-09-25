@@ -6,6 +6,7 @@ local repo = nil  -- This will be assigned the passed repo object from main.lua
 local reactorIDs = {}  -- Initialize the reactorIDs table
 local reactors = {}
 local pages = {}
+local reactorOutputLog = {}
 local w, h = monitor.getSize()
 
 -- Button logic
@@ -230,7 +231,7 @@ function displayReactorLists()
 
     -- Display Overheating Reactors
     monitor.setCursorPos(xOverheating, yStart)
-    monitor.setTextColor(colors.red)
+    monitor.setTextColor(colors.yellow)  -- Changed to yellow
     monitor.write("Overheating Reactors")
     local y = yStart + 1
     for id, reactor in pairs(reactors) do
@@ -242,10 +243,10 @@ function displayReactorLists()
         end
     end
 
-    -- Display Maintenance Reactors
+    -- Display Reactor Maintenance
     monitor.setCursorPos(xMaintenance, yStart)
-    monitor.setTextColor(colors.orange)
-    monitor.write("Maintenance Reactors")
+    monitor.setTextColor(colors.blue)  -- Changed to blue
+    monitor.write("Reactor Maintenance")  -- Renamed
     y = yStart + 1
     for id, reactor in pairs(reactors) do
         if reactor.isMaintenance then
@@ -258,7 +259,7 @@ function displayReactorLists()
 
     -- Display Destroyed Reactors
     monitor.setCursorPos(xDestroyed, yStart)
-    monitor.setTextColor(colors.black)
+    monitor.setTextColor(colors.red)  -- Changed to red
     monitor.write("Destroyed Reactors")
     y = yStart + 1
     for id, reactor in pairs(reactors) do
@@ -272,12 +273,13 @@ function displayReactorLists()
 end
 
 -- Display Home Page
-function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed)
+function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed)
     resetButtons()
     repo = repoPassed
     reactorIDs = reactorTablePassed
     reactors = reactorsPassed
     pages.numReactorPages = numReactorPagesPassed
+    reactorOutputLog = reactorOutputLogPassed
     style.applyStyle()
     monitor.clear()
     -- Center and color the header
@@ -308,6 +310,125 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
 
     -- Display overheating, maintenance, and destroyed reactors lists
     displayReactorLists()
+
+    -- Compute total operational reactors and active reactors
+    local totalOperationalReactors = 0
+    local activeReactors = 0
+
+    for _, reactor in pairs(reactors) do
+        if not reactor.isMaintenance and not reactor.destroyed then
+            totalOperationalReactors = totalOperationalReactors + 1
+            if reactor.active then
+                activeReactors = activeReactors + 1
+            end
+        end
+    end
+
+    -- Calculate the fill percentage for the progress bar
+    local fillPercentage = 0
+    if totalOperationalReactors > 0 then
+        fillPercentage = (activeReactors / totalOperationalReactors) * 100
+    end
+
+    -- Compute total reactor output
+    local totalReactorOutput = 0
+    for id, data in pairs(reactorOutputLog) do
+        totalReactorOutput = totalReactorOutput + data.maxOutput
+    end
+
+    -- Compute current reactor output
+    local currentReactorOutput = 0
+    for id, reactor in pairs(reactors) do
+        if reactor.active and not reactor.isMaintenance and not reactor.destroyed then
+            local euOutputNum = tonumber(reactor.euOutput)
+            if euOutputNum then
+                currentReactorOutput = currentReactorOutput + euOutputNum
+            end
+        end
+    end
+
+    -- Format outputs (e.g., display in k EU/t)
+    local function formatEUOutput(value)
+        if value >= 1000000 then
+            return string.format("%.2f M EU/t", value / 1000000)
+        elseif value >= 1000 then
+            return string.format("%.0f k EU/t", value / 1000)
+        else
+            return string.format("%.0f EU/t", value)
+        end
+    end
+
+    -- Positions
+    local progressBarY = h - 7
+    local currentOutputY = progressBarY - 2
+    local totalOutputY = currentOutputY - 1
+
+    -- Display "Total Reactor Output:"
+    monitor.setCursorPos(1, totalOutputY)
+    monitor.clearLine()
+    local totalOutputText = "Total Reactor Output: " .. formatEUOutput(totalReactorOutput)
+    local xTotalOutput = math.floor((w - #totalOutputText) / 2) + 1
+    monitor.setCursorPos(xTotalOutput, totalOutputY)
+    monitor.write(totalOutputText)
+
+    -- Display "Current Reactor Output:"
+    monitor.setCursorPos(1, currentOutputY)
+    monitor.clearLine()
+    local currentOutputText = "Current Reactor Output: " .. formatEUOutput(currentReactorOutput)
+    local xCurrentOutput = math.floor((w - #currentOutputText) / 2) + 1
+    monitor.setCursorPos(xCurrentOutput, currentOutputY)
+    monitor.write(currentOutputText)
+
+    -- Draw progress bar
+    local progressBarWidth = w - 4  -- Leave some padding on sides
+    local filledBars = math.floor((fillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
+    local emptyBars = (progressBarWidth - 2) - filledBars
+
+    -- Draw progress bar border
+    monitor.setCursorPos(3, progressBarY)
+    monitor.setBackgroundColor(colors.black)
+    monitor.write(string.rep(" ", progressBarWidth))  -- Top border
+
+    monitor.setCursorPos(3, progressBarY + 1)
+    monitor.write(" ")  -- Left border
+    monitor.setCursorPos(2 + progressBarWidth, progressBarY + 1)
+    monitor.write(" ")  -- Right border
+
+    monitor.setCursorPos(3, progressBarY + 2)
+    monitor.write(string.rep(" ", progressBarWidth))  -- Bottom border
+
+    -- Draw filled portion
+    -- Set color based on percentage
+    if fillPercentage >= 100 then
+        monitor.setTextColor(colors.blue)
+    elseif fillPercentage >= 80 then
+        monitor.setTextColor(colors.green)
+    elseif fillPercentage >= 50 then
+        monitor.setTextColor(colors.yellow)
+    elseif fillPercentage >= 20 then
+        monitor.setTextColor(colors.orange)
+    else
+        monitor.setTextColor(colors.red)
+    end
+    monitor.setBackgroundColor(colors.black)
+    monitor.setCursorPos(4, progressBarY + 1)
+    monitor.write(string.rep(" ", progressBarWidth - 2))  -- Clear inside
+
+    monitor.setBackgroundColor(monitor.getTextColor())
+    monitor.setCursorPos(4, progressBarY + 1)
+    monitor.write(string.rep(" ", filledBars))
+
+    -- Write percentage over the progress bar
+    monitor.setBackgroundColor(colors.black)  -- Set background to black for percentage text
+    monitor.setTextColor(colors.white)
+    local percentageText = string.format("%.2f%%", fillPercentage)
+    local percentageX = math.floor((w - #percentageText) / 2) + 1
+    monitor.setCursorPos(percentageX, progressBarY + 1)
+    monitor.write(percentageText)
+
+    -- Reset colors
+    monitor.setBackgroundColor(style.style.backgroundColor)
+    monitor.setTextColor(style.style.textColor)
 
     -- Call the centerButtons function to display buttons at the bottom
     centerButtons("home", pages.numReactorPages)
