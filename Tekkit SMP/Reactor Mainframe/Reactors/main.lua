@@ -1,4 +1,4 @@
--- main.lua
+-- Reactor Mainframe - main.lua
 
 local ui = require("ui")
 local reactorsModule = require("reactors")
@@ -99,6 +99,39 @@ local function saveReactorOutputLog()
     end
 end
 
+-- Function to load power log from file
+local function loadPowerLog()
+    if fs.exists("power_log.txt") then
+        local file = fs.open("power_log.txt", "r")
+        if file then
+            local lastLine = nil
+            repeat
+                local line = file.readLine()
+                if line then
+                    lastLine = line
+                end
+            until not line
+            file.close()
+            if lastLine == "turn_on" then
+                reactorsOnDueToPESU = true
+            else
+                reactorsOnDueToPESU = false
+            end
+        end
+    else
+        reactorsOnDueToPESU = false
+    end
+end
+
+-- Function to save power log to file
+local function savePowerLog(action)
+    local file = fs.open("power_log.txt", "a")
+    if file then
+        file.writeLine(action)
+        file.close()
+    end
+end
+
 -- Function to request data from all reactors on startup
 local function requestReactorData()
     for _, reactor in pairs(reactorTable) do
@@ -161,7 +194,8 @@ local function handleActivityCheckMessage(message)
     if message.command == "player_online" then
         print("Received player_online command from activity check computer.")
         anyPlayerOnline = true
-        -- Turn on reactors that are not in maintenance mode or overheating or destroyed
+
+        -- Only turn on reactors if both conditions are met
         if reactorsOnDueToPESU then
             for _, reactor in pairs(reactorTable) do
                 local id = reactor.id
@@ -174,7 +208,10 @@ local function handleActivityCheckMessage(message)
                     end
                 end
             end
+        else
+            print("Reactors are not turned on due to PESU levels.")
         end
+
         -- Update the display
         if currentPage == "home" then
             ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
@@ -208,7 +245,8 @@ local function handlePowerMainframeMessage(message)
     if message.command == "turn_on_reactors" then
         print("Received turn_on_reactors command from power mainframe.")
         reactorsOnDueToPESU = true
-        -- Turn on reactors that are not in maintenance mode or overheating or destroyed, and if players are online
+        savePowerLog("turn_on")
+        -- Turn on reactors only if players are online
         if anyPlayerOnline then
             for _, reactor in pairs(reactorTable) do
                 local id = reactor.id
@@ -227,6 +265,7 @@ local function handlePowerMainframeMessage(message)
     elseif message.command == "turn_off_reactors" then
         print("Received turn_off_reactors command from power mainframe.")
         reactorsOnDueToPESU = false
+        savePowerLog("turn_off")
         -- Turn off all reactors
         for _, reactor in pairs(reactorTable) do
             local id = reactor.id
@@ -251,6 +290,9 @@ local function main()
     -- Load reactor output log
     loadReactorOutputLog()
 
+    -- Load power log
+    loadPowerLog()
+
     -- Display the home page initially
     ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
 
@@ -259,6 +301,24 @@ local function main()
 
     -- Request data from all reactors on startup
     requestReactorData()
+
+    -- Check if reactors should be turned on based on power log and player activity
+    if reactorsOnDueToPESU and anyPlayerOnline then
+        print("Reactors were previously turned on and players are online. Turning on reactors.")
+        for _, reactor in pairs(reactorTable) do
+            local id = reactor.id
+            local state = repo.get(id .. "_state")
+            local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+            if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+                if not state then
+                    repo.set(id .. "_state", true)
+                    rednet.send(id, {command = "turn_on"})
+                end
+            end
+        end
+    else
+        print("Reactors will remain off on startup.")
+    end
 
     -- Listen for button presses and reactor data in parallel
     parallel.waitForAny(
