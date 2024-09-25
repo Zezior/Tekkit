@@ -126,33 +126,25 @@ local reactorsOnDueToPESU = false  -- Track if reactors are turned on due to PES
 local anyPlayerOnline = false  -- Track player online status
 local manualOverride = false  -- Track if manual override is active
 
--- Function to switch between pages dynamically
-local function switchPage(page)
-    if pages[page] then
-        currentPage = page
-        if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
-        elseif string.sub(currentPage, 1, 7) == "reactor" then
-            -- Extract page number
-            local pageNumString = string.sub(currentPage, 8)
-            local pageNum = tonumber(pageNumString)
-            if not pageNum then
-                print("Invalid reactor page number:", pageNumString)
-                return
-            end
-            ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
-        else
-            -- Placeholder for other pages if needed
-        end
-    else
-        print("Page not found: " .. page)
-    end
-end
-
 -- Function to send reactor status to power mainframe
 local function sendReactorStatus(status)
     rednet.send(powerMainframeID, {command = "reactor_status", status = status}, "reactor_control")
     print("Sent reactor status to power mainframe:", status)
+end
+
+-- Function to calculate total EU/t output from all reactors
+local function calculateTotalReactorOutput()
+    local totalOutput = 0
+    for _, reactorID in ipairs(reactorIDs) do
+        local reactorData = reactors[reactorID]
+        if reactorData and not reactorData.destroyed then
+            local euOutputNum = tonumber(reactorData.euOutput)
+            if euOutputNum then
+                totalOutput = totalOutput + euOutputNum
+            end
+        end
+    end
+    return totalOutput
 end
 
 -- Function to handle messages from the activity check computer
@@ -179,6 +171,12 @@ local function handleActivityCheckMessage(message)
             end
             if reactorsTurnedOn then
                 sendReactorStatus("on")
+                -- Wait 10 seconds
+                sleep(10)
+                -- Send total EU/t output
+                local totalEUOutput = calculateTotalReactorOutput()
+                rednet.send(powerMainframeID, {command = "total_eu_output", totalEUOutput = totalEUOutput}, "reactor_output")
+                print("Sent total EU/t output to Power Mainframe:", totalEUOutput)
             end
         else
             print("Reactors are not turned on due to PESU levels or manual override.")
@@ -238,6 +236,12 @@ local function handleActivityCheckMessage(message)
             end
             if reactorsTurnedOn then
                 sendReactorStatus("on")
+                -- Wait 10 seconds
+                sleep(10)
+                -- Send total EU/t output
+                local totalEUOutput = calculateTotalReactorOutput()
+                rednet.send(powerMainframeID, {command = "total_eu_output", totalEUOutput = totalEUOutput}, "reactor_output")
+                print("Sent total EU/t output to Power Mainframe:", totalEUOutput)
             end
             -- Update the display
             if currentPage == "home" then
@@ -278,6 +282,12 @@ local function handlePowerMainframeMessage(message)
             end
             if reactorsTurnedOn then
                 sendReactorStatus("on")
+                -- Wait 10 seconds
+                sleep(10)
+                -- Send total EU/t output
+                local totalEUOutput = calculateTotalReactorOutput()
+                rednet.send(powerMainframeID, {command = "total_eu_output", totalEUOutput = totalEUOutput}, "reactor_output")
+                print("Sent total EU/t output to Power Mainframe:", totalEUOutput)
             end
         else
             print("Players are offline. Reactors will turn on when a player comes online.")
@@ -307,6 +317,29 @@ local function handlePowerMainframeMessage(message)
     -- Update the display
     if currentPage == "home" then
         ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+    end
+end
+
+-- Function to switch between pages dynamically
+local function switchPage(page)
+    if pages[page] then
+        currentPage = page
+        if currentPage == "home" then
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+        elseif string.sub(currentPage, 1, 7) == "reactor" then
+            -- Extract page number
+            local pageNumString = string.sub(currentPage, 8)
+            local pageNum = tonumber(pageNumString)
+            if not pageNum then
+                print("Invalid reactor page number:", pageNumString)
+                return
+            end
+            ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
+        else
+            -- Placeholder for other pages if needed
+        end
+    else
+        print("Page not found: " .. page)
     end
 end
 

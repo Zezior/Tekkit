@@ -58,6 +58,11 @@ local lastUpdateTime = os.clock()
 
 -- Variable to store reactor status
 local reactorsStatus = "off" -- Default status; will be updated based on received messages
+local reactorsAreOn = false  -- Track if reactors are on
+
+-- Variables to track reactor output and time to full charge
+local totalEUOutput = 0   -- Total EU/t output from reactors
+local timeToFullCharge = 0   -- Time in seconds until full charge
 
 -- Function to format percentages
 local function formatPercentage(value)
@@ -233,6 +238,21 @@ local function processPESUData()
             table.insert(pagesData[pageNum], pesuList[idx])
         end
     end
+
+    -- Recalculate time to full charge
+    calculateTimeToFullCharge()
+    displayNeedsRefresh = true
+end
+
+-- Function to calculate time to full charge
+local function calculateTimeToFullCharge()
+    if reactorsAreOn and totalEUOutput > 0 then
+        local euPerSecond = totalEUOutput * 20  -- Convert EU/t to EU per second (20 ticks per second)
+        local euNeeded = totalCapacity - totalStored
+        timeToFullCharge = euNeeded / euPerSecond
+    else
+        timeToFullCharge = 0
+    end
 end
 
 -- Function to display the PESU Page
@@ -382,7 +402,7 @@ local function displayHomePage()
 
     -- Display reactor status above progress bar
     local reactorStatusY = h - 10
-    if reactorsStatus == "on" then
+    if reactorsAreOn then
         monitor.setTextColor(colors.green)
         centerText("Reactors are ON", reactorStatusY)
     else
@@ -390,8 +410,26 @@ local function displayHomePage()
         centerText("Reactors are OFF", reactorStatusY)
     end
 
+    -- Display time to full charge if reactors are on and timeToFullCharge > 0
+    if reactorsAreOn and timeToFullCharge > 0 then
+        local hours = math.floor(timeToFullCharge / 3600)
+        local minutes = math.floor((timeToFullCharge % 3600) / 60)
+        local timeString = ""
+        if hours > 0 then
+            timeString = string.format("Power facility fully charged in: %dh %dmins", hours, minutes)
+        else
+            timeString = string.format("Power facility fully charged in: %dmins", minutes)
+        end
+        monitor.setTextColor(colors.white)
+        centerText(timeString, reactorStatusY + 1)
+    else
+        -- Clear the line if reactors are off or time is zero
+        monitor.setCursorPos(1, reactorStatusY + 1)
+        monitor.clearLine()
+    end
+
     -- Display total power capacity
-    local capacityY = reactorStatusY + 1
+    local capacityY = reactorStatusY + 2
     monitor.setTextColor(colors.white)
     local capacityText = string.format("Total Power Capacity: %d Billion EU", totalCapacity / 1000000000)
     centerText(capacityText, capacityY)
@@ -483,7 +521,7 @@ local function handleIncomingData()
         if type(message) == "table" and message.command then
             -- Debug: Print sender ID and type
             print("Received message from sender ID:", senderID, "Type:", type(senderID))
-            if table.contains(allowedSenderIDs, senderID) then
+            if table.contains(allowedSenderIDs, senderID) or senderID == reactorMainframeID then
                 if message.command == "pesu_data" then
                     -- Store the PESU data from the sender
                     pesuDataFromSenders[senderID] = message
@@ -497,8 +535,15 @@ local function handleIncomingData()
                     print("Processed panel data from sender ID:", senderID)
                 elseif message.command == "reactor_status" then
                     reactorsStatus = message.status  -- "on" or "off"
+                    reactorsAreOn = (message.status == "on")
+                    calculateTimeToFullCharge()
                     displayNeedsRefresh = true
                     print("Updated reactor status to:", reactorsStatus)
+                elseif message.command == "total_eu_output" and message.totalEUOutput then
+                    totalEUOutput = message.totalEUOutput
+                    print("Received total EU/t output from reactor mainframe:", totalEUOutput)
+                    calculateTimeToFullCharge()
+                    displayNeedsRefresh = true
                 else
                     print("Unknown command from sender ID:", senderID)
                 end
@@ -508,6 +553,15 @@ local function handleIncomingData()
         else
             print("Warning: Received malformed data from Sender ID:", senderID)
         end
+    end
+end
+
+-- Function to periodically update time to full charge
+local function periodicTimeUpdater()
+    while true do
+        sleep(60)  -- Update every minute
+        calculateTimeToFullCharge()
+        displayNeedsRefresh = true
     end
 end
 
@@ -558,7 +612,8 @@ local function main()
             end
         end,
         handleIncomingData,
-        monitorPESU  -- Add monitorPESU function to parallel execution
+        monitorPESU,  -- Add monitorPESU function to parallel execution
+        periodicTimeUpdater  -- Add periodicTimeUpdater function
     )
 end
 
