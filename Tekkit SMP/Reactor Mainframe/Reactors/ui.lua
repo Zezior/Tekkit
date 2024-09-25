@@ -410,7 +410,8 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     table.insert(buttonList, masterButton)
 
     -- Create "Reset" button next to it
-    local resetButton = Button:new(nil, buttonX, buttonY + buttonHeight + 1, buttonWidth, buttonHeight, "Reset", colors.orange, "reset")
+    local resetButtonX = buttonX + buttonWidth + 2  -- Add spacing
+    local resetButton = Button:new(nil, resetButtonX, buttonY, buttonWidth, buttonHeight, "Reset", colors.orange, "reset")
     resetButton:draw()
     table.insert(buttonList, resetButton)
 
