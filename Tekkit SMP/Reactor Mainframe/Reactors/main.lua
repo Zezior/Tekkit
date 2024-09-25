@@ -269,6 +269,8 @@ local function handleActivityCheckMessage(message)
             if currentPage == "home" then
                 ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
             end
+        else
+            print("Reactors are not turned on due to PESU levels or no players online.")
         end
     else
         print("Unknown command from activity check computer:", message.command)
@@ -345,15 +347,19 @@ local function main()
     elseif lastPowerCommand == "turn_off_reactors" then
         reactorsOnDueToPESU = false
         -- Ensure reactors are off
+        local reactorsTurnedOff = false
         for _, reactor in pairs(reactorTable) do
             local id = reactor.id
             local state = repo.get(id .. "_state")
             if state then
                 repo.set(id .. "_state", false)
                 rednet.send(id, {command = "turn_off"})
+                reactorsTurnedOff = true
             end
         end
-        sendReactorStatus("off")
+        if reactorsTurnedOff then
+            sendReactorStatus("off")
+        end
     end
 
     -- Display the home page initially
@@ -384,6 +390,7 @@ local function main()
                                 end
                             end
                         end
+                        local reactorsChanged = false
                         for _, reactor in pairs(reactorTable) do
                             local id = reactor.id
                             local state = repo.get(id .. "_state")
@@ -395,11 +402,14 @@ local function main()
                                 else
                                     rednet.send(id, {command = "turn_off"})
                                 end
+                                reactorsChanged = true
                             end
                         end
                         -- Reset reactorsOnDueToPESU to false
                         reactorsOnDueToPESU = false
-                        sendReactorStatus(anyReactorOff and "on" or "off")
+                        if reactorsChanged then
+                            sendReactorStatus(anyReactorOff and "on" or "off")
+                        end
                         -- Update display
                         ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
                     else
