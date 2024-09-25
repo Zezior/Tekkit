@@ -260,18 +260,16 @@ local function displayPESUPage(pesuData)
         local fillPercentage = (data.stored / data.capacity) * 100
         setColorBasedOnPercentage(fillPercentage)
 
-        -- Format PESU number and percentage with fixed widths
-        local pesuNumberStr = string.format("PESU %4d:", globalIdx)
-        local percentageStr = string.format("%6.2f%%", fillPercentage)
+        -- Format PESU number and percentage
+        local pesuNumberStr = string.format("PESU %d:", globalIdx)
+        local percentageStr = string.format("%.2f%%", fillPercentage)
 
-        -- Positions
-        local pesuX = x + 2  -- Adjust as needed
-        local percentageX = x + columnWidth - #percentageStr - 2  -- Adjust as needed
+        -- Calculate positions to align text neatly
+        local totalText = pesuNumberStr .. " " .. percentageStr
+        local textX = x + math.floor((columnWidth - #totalText) / 2)
 
-        monitor.setCursorPos(pesuX, y)
-        monitor.write(pesuNumberStr)
-        monitor.setCursorPos(percentageX, y)
-        monitor.write(percentageStr)
+        monitor.setCursorPos(textX, y)
+        monitor.write(pesuNumberStr .. " " .. percentageStr)
     end
     monitor.setTextColor(colors.white)
 end
@@ -325,18 +323,16 @@ local function displayHomePage()
             local fillPercentage = (pesu.stored / pesu.capacity) * 100
             setColorBasedOnPercentage(fillPercentage)
 
-            -- Format PESU number and percentage with fixed widths
-            local pesuNumberStr = string.format("PESU %4d:", pesu.index)
-            local percentageStr = string.format("%6.2f%%", fillPercentage)
+            -- Format PESU number and percentage
+            local pesuNumberStr = string.format("PESU %d:", pesu.index)
+            local percentageStr = string.format("%.2f%%", fillPercentage)
 
-            -- Positions
-            local pesuX = leftColumnX + 2  -- Adjust as needed
-            local percentageX = leftColumnX + leftColumnWidth - #percentageStr - 2  -- Adjust as needed
+            -- Calculate positions to align text neatly
+            local totalText = pesuNumberStr .. " " .. percentageStr
+            local textX = leftColumnX + math.floor((leftColumnWidth - #totalText) / 2)
 
-            monitor.setCursorPos(pesuX, leftColumnStartY + i)
-            monitor.write(pesuNumberStr)
-            monitor.setCursorPos(percentageX, leftColumnStartY + i)
-            monitor.write(percentageStr)
+            monitor.setCursorPos(textX, leftColumnStartY + i)
+            monitor.write(pesuNumberStr .. " " .. percentageStr)
         end
         monitor.setTextColor(colors.white)
     end
@@ -365,7 +361,7 @@ local function displayHomePage()
             monitor.write(usageText)
             panelY = panelY + 1
 
-            local fillText = "Filled: " .. string.format("%6.2f%%", panelData.fillPercentage)
+            local fillText = "Filled: " .. string.format("%.2f%%", panelData.fillPercentage)
             setColorBasedOnPercentage(panelData.fillPercentage)
             monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
             monitor.write(fillText)
@@ -417,7 +413,7 @@ local function displayHomePage()
     monitor.write(string.rep(" ", filledBars))
 
     -- Write percentage over the progress bar
-    monitor.setBackgroundColor(bgColor)
+    monitor.setBackgroundColor(colors.black)  -- Set background to black for percentage text
     monitor.setTextColor(colors.white)
     local percentageText = formatPercentage(totalFillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
