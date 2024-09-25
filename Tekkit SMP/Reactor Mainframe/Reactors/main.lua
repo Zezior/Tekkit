@@ -8,6 +8,7 @@ local ids = require("ids")
 local activityCheckID = ids.activityCheckID
 local powerMainframeID = ids.powerMainframeID
 local reactorMainframeID = ids.reactorMainframeID
+local reactorIDsFromFile = ids.reactorIDs  -- Assuming reactor IDs are listed here
 
 -- Initialize variables
 local currentPage = "home"  -- Start on the home page
@@ -313,13 +314,27 @@ local function rebuildReactorDataStructures()
     reactorIDs = {}
     reactorTable = {}
     reactors = {}
-    for reactorID, data in pairs(reactorOutputLog) do
+
+    -- Load reactor IDs from ids.lua
+    for _, reactorID in ipairs(reactorIDsFromFile) do
         table.insert(reactorIDs, reactorID)
     end
+
+    -- Remove duplicates
+    local seen = {}
+    local uniqueReactorIDs = {}
+    for _, id in ipairs(reactorIDs) do
+        if not seen[id] then
+            table.insert(uniqueReactorIDs, id)
+            seen[id] = true
+        end
+    end
+    reactorIDs = uniqueReactorIDs
+
     table.sort(reactorIDs)
 
     for index, reactorID in ipairs(reactorIDs) do
-        local reactorName = reactorOutputLog[reactorID].reactorName or "Reactor " .. index
+        local reactorName = reactorOutputLog[reactorID] and reactorOutputLog[reactorID].reactorName or "Reactor " .. reactorID
         reactorTable[reactorID] = {id = reactorID, name = reactorName}
         repo.set(reactorID .. "_state", false)  -- Assuming reactors start off
         reactors[reactorID] = {
@@ -477,25 +492,13 @@ local function main()
                 elseif senderID == powerMainframeID then
                     -- Handle messages from the power mainframe
                     handlePowerMainframeMessage(message)
-                else
+                elseif isReactorID(senderID) then
                     -- Handle messages from reactors
                     if type(message) == "table" and message.id then
                         local reactorID = message.id
-                        -- Check if reactor is new
-                        if not reactors[reactorID] then
-                            print("New reactor detected: " .. reactorID)
-                            -- Add reactor to reactorOutputLog
-                            reactorOutputLog[reactorID] = {
-                                reactorName = message.reactorName,
-                                maxOutput = tonumber(message.euOutput) or 0
-                            }
-                            saveReactorOutputLog()
-                            -- Rebuild reactor data structures
-                            rebuildReactorDataStructures()
-                            -- Re-bind reactor buttons
-                            ui.bindReactorButtons(reactorTable, repo)
-                            -- Update the display
-                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+                        -- Update reactor name if available
+                        if message.reactorName then
+                            reactors[reactorID].reactorName = message.reactorName
                         end
 
                         -- Store the latest reactor data
@@ -580,8 +583,10 @@ local function main()
                             ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
                         end
                     else
-                        print("Received message from unknown sender ID:", senderID)
+                        print("Invalid message received from reactor ID:", senderID)
                     end
+                else
+                    print("Received message from unknown sender ID:", senderID)
                 end
             end
         end
