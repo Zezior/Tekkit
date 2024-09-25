@@ -191,14 +191,19 @@ end
 local function centerButtons(page, numReactorPages)
     local buttonWidth = 10
     local buttonHeight = 3
+    local spacing = 2
     local totalButtons = 1 + numReactorPages  -- Home + reactor pages
-    local x = 2  -- Start from the left edge with some padding
+
+    local buttonsTotalWidth = totalButtons * buttonWidth + (totalButtons - 1) * spacing
+    local xStart = math.floor((w - buttonsTotalWidth) / 2) + 1
+
+    local x = xStart
 
     -- Define the Home button
     local homeButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, "Home", page == "home" and colors.green or colors.blue, "home")
     homeButton:draw()
     table.insert(buttonList, homeButton)
-    x = x + buttonWidth + 2
+    x = x + buttonWidth + spacing
 
     -- Define Reactor page buttons
     for i = 1, numReactorPages do
@@ -208,7 +213,7 @@ local function centerButtons(page, numReactorPages)
         local reactorButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, pageName, buttonColor, action)
         reactorButton:draw()
         table.insert(buttonList, reactorButton)
-        x = x + buttonWidth + 2
+        x = x + buttonWidth + spacing
     end
 end
 
@@ -366,25 +371,25 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.write(statusText)
     monitor.setTextColor(style.style.textColor)
 
-    -- Display "Total Reactor Output:"
-    monitor.setCursorPos(1, totalOutputY)
-    monitor.clearLine()
+    -- Display "Total Reactor Output:" centered
     local totalOutputText = "Total Reactor Output: " .. formatEUOutput(totalReactorOutput)
-    monitor.setCursorPos(1, totalOutputY)
+    local xTotalOutput = math.floor((w - #totalOutputText) / 2) + 1
+    monitor.setCursorPos(xTotalOutput, totalOutputY)
+    monitor.clearLine()
     monitor.write(totalOutputText)
 
-    -- Display "Current Reactor Output:"
-    monitor.setCursorPos(1, currentOutputY)
-    monitor.clearLine()
+    -- Display "Current Reactor Output:" centered
     local currentOutputText = "Current Reactor Output: " .. formatEUOutput(currentReactorOutput)
-    monitor.setCursorPos(1, currentOutputY)
+    local xCurrentOutput = math.floor((w - #currentOutputText) / 2) + 1
+    monitor.setCursorPos(xCurrentOutput, currentOutputY)
+    monitor.clearLine()
     monitor.write(currentOutputText)
 
     -- Add "All On/Off" and "Reset" buttons on the far left
     local buttonY = totalOutputY
     local buttonWidth = 8
     local buttonHeight = 2
-    local buttonX = w - buttonWidth - 2  -- Place on the far right
+    local buttonX = 2  -- Place on the far left
 
     -- Determine button text and color
     local anyReactorOff = false
@@ -400,18 +405,18 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     local masterButtonColor = anyReactorOff and colors.green or colors.red
 
     -- Create "All On/Off" button
-    local masterButton = Button:new(nil, 2, buttonY, buttonWidth, buttonHeight, masterButtonText, masterButtonColor, "toggle_all")
+    local masterButton = Button:new(nil, buttonX, buttonY, buttonWidth, buttonHeight, masterButtonText, masterButtonColor, "toggle_all")
     masterButton:draw()
     table.insert(buttonList, masterButton)
 
     -- Create "Reset" button next to it
-    local resetButton = Button:new(nil, 2, buttonY + buttonHeight + 1, buttonWidth, buttonHeight, "Reset", colors.orange, "reset")
+    local resetButton = Button:new(nil, buttonX, buttonY + buttonHeight + 1, buttonWidth, buttonHeight, "Reset", colors.orange, "reset")
     resetButton:draw()
     table.insert(buttonList, resetButton)
 
     -- Indicate if manual override is active
     if manualOverride then
-        monitor.setCursorPos(2, buttonY - 1)
+        monitor.setCursorPos(buttonX, buttonY - 1)
         monitor.setTextColor(colors.orange)
         monitor.write("Manual Override Active")
         monitor.setTextColor(style.style.textColor)
