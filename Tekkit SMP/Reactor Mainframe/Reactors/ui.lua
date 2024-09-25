@@ -223,7 +223,7 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
     monitor.setTextColor(style.style.textColor)
 
     -- Display reactors per page
-    local reactorsPerPage = 18  -- 6 reactors per column, 3 columns
+    local reactorsPerPage = 15  -- 6 reactors per column, 3 columns
     local startIdx = (pageNum - 1) * reactorsPerPage + 1
     local endIdx = math.min(startIdx + reactorsPerPage -1, #reactorIDs)
 
