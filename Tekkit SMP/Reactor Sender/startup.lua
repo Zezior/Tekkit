@@ -1,7 +1,6 @@
 -- startup.lua
 
-redstone.setOutput("top", false)  -- Replace "top" with the side where your redstone is connected
-shell.run("reactor_sender.lua")
+redstone.setOutput("top", false)
 
 
 local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Reactor%20Sender/"
