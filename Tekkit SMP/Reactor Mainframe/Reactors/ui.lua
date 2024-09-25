@@ -250,6 +250,10 @@ function addReactorControlButtons(reactorID, status, x, y, data, buttonWidth)
     button:draw()
 end
 
+-- ui.lua
+
+-- ... [Other code remains unchanged]
+
 -- Function to display reactor data on reactor pages
 function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDsPassed)
     resetButtons()
@@ -294,7 +298,7 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
 
             -- Display reactor info
             monitor.setCursorPos(x + 6, y)
-            monitor.write("Reactor " .. idx .. ": " .. reactorData.reactorName)
+            monitor.write(reactorData.reactorName)
             monitor.setCursorPos(x + 6, y +1)
             monitor.write("Status: " .. (reactorData.active and "Active" or "Inactive"))
             monitor.setCursorPos(x + 6, y +2)
@@ -307,6 +311,9 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
     -- Call the centerButtons function to display navigation buttons
     centerButtons("reactor" .. pageNum, pages.numReactorPages)
 end
+
+-- ... [Rest of the code remains unchanged]
+
 
 -- Function to display the home page
 function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESUPassed, manualOverridePassed)

@@ -1,19 +1,22 @@
 -- Reactor Mainframe - main.lua
 
+-- Import required modules
 local ui = require("ui")
 local ids = require("ids")
 
-local reactorIDs = ids.reactorIDs
+-- Get IDs from ids.lua
 local activityCheckID = ids.activityCheckID
 local powerMainframeID = ids.powerMainframeID
 local reactorMainframeID = ids.reactorMainframeID
 
-table.sort(reactorIDs)
-local minReactorID = reactorIDs[1] or 0
-
+-- Initialize variables
 local currentPage = "home"  -- Start on the home page
 local reactors = {}  -- Table to store reactor data
 local reactorOutputLog = {}  -- Table to store reactor output data
+local reactorIDs = {}  -- List of reactor IDs
+local reactorTable = {}  -- Table to store reactor information
+local pages = {}  -- Pages for UI navigation
+local numReactorPages = 0  -- Number of reactor pages
 
 -- Initialize the repo for managing reactor states
 local repo = {
@@ -48,28 +51,6 @@ end
 
 -- Ensure Rednet is open on the mainframe
 rednet.open("top")  -- Adjust the side as needed for the modem
-
--- Dynamically generate the reactorTable based on reactorIDs
-local reactorTable = {}
-for index, reactorID in ipairs(reactorIDs) do
-    reactorTable["Reactor" .. index] = {id = reactorID, name = "Reactor " .. index}
-end
-
--- Initialize reactor states in the repo and reactors table
-for _, reactor in pairs(reactorTable) do
-    repo.set(reactor.id .. "_state", false)  -- Assuming reactors start off
-    reactors[reactor.id] = {
-        reactorName = reactor.name,
-        temp = "N/A",
-        active = false,
-        euOutput = "0",
-        fuelRemaining = "N/A",
-        isMaintenance = false,
-        overheating = false,
-        destroyed = false,  -- Add destroyed flag
-        status = "unknown"  -- Add status field
-    }
-end
 
 -- Function to load reactor output log from file
 local function loadReactorOutputLog()
@@ -125,26 +106,12 @@ end
 
 -- Function to request data from all reactors on startup
 local function requestReactorData()
-    for _, reactor in pairs(reactorTable) do
-        rednet.send(reactor.id, {command = "send_data"})
+    for _, reactorID in ipairs(reactorIDs) do
+        rednet.send(reactorID, {command = "send_data"})
     end
 end
 
--- Compute the number of reactor pages
-local totalReactors = #reactorIDs
-local reactorsPerPage = 10  -- Updated to match the new layout
-local numReactorPages = math.ceil(totalReactors / reactorsPerPage)
-
--- Build pages list
-local pages = {
-    home = "Home Page"
-}
-
-for i = 1, numReactorPages do
-    pages["reactor" .. i] = "Reactor Status Page " .. i
-end
-
--- Check if senderID is in the reactor IDs list
+-- Function to check if senderID is in the reactor IDs list
 local function isReactorID(senderID)
     for _, reactorID in ipairs(reactorIDs) do
         if reactorID == senderID then
@@ -196,8 +163,8 @@ local function handleActivityCheckMessage(message)
         -- Only turn on reactors if both conditions are met
         if reactorsOnDueToPESU and not manualOverride then
             local reactorsTurnedOn = false
-            for _, reactor in pairs(reactorTable) do
-                local id = reactor.id
+            for _, reactorID in ipairs(reactorIDs) do
+                local id = reactorID
                 local state = repo.get(id .. "_state")
                 local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
@@ -225,8 +192,8 @@ local function handleActivityCheckMessage(message)
         -- Turn off all reactors if not in manual override
         if not manualOverride then
             local reactorsTurnedOff = false
-            for _, reactor in pairs(reactorTable) do
-                local id = reactor.id
+            for _, reactorID in ipairs(reactorIDs) do
+                local id = reactorID
                 local state = repo.get(id .. "_state")
                 if state then
                     repo.set(id .. "_state", false)
@@ -255,8 +222,8 @@ local function handleActivityCheckMessage(message)
         if anyPlayerOnline and reactorsOnDueToPESU and not manualOverride then
             local reactorsTurnedOn = false
             -- Turn on reactors
-            for _, reactor in pairs(reactorTable) do
-                local id = reactor.id
+            for _, reactorID in ipairs(reactorIDs) do
+                local id = reactorID
                 local state = repo.get(id .. "_state")
                 local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
@@ -295,8 +262,8 @@ local function handlePowerMainframeMessage(message)
         -- Turn on reactors only if players are online
         if anyPlayerOnline then
             local reactorsTurnedOn = false
-            for _, reactor in pairs(reactorTable) do
-                local id = reactor.id
+            for _, reactorID in ipairs(reactorIDs) do
+                local id = reactorID
                 local state = repo.get(id .. "_state")
                 local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
@@ -319,8 +286,8 @@ local function handlePowerMainframeMessage(message)
         saveLastPowerCommand("turn_off_reactors")
         -- Turn off all reactors
         local reactorsTurnedOff = false
-        for _, reactor in pairs(reactorTable) do
-            local id = reactor.id
+        for _, reactorID in ipairs(reactorIDs) do
+            local id = reactorID
             local state = repo.get(id .. "_state")
             if state then
                 repo.set(id .. "_state", false)
@@ -341,10 +308,55 @@ local function handlePowerMainframeMessage(message)
     end
 end
 
+-- Function to rebuild reactorTable, reactorIDs, numReactorPages, and pages
+local function rebuildReactorDataStructures()
+    reactorIDs = {}
+    reactorTable = {}
+    reactors = {}
+    for reactorID, data in pairs(reactorOutputLog) do
+        table.insert(reactorIDs, reactorID)
+    end
+    table.sort(reactorIDs)
+
+    for index, reactorID in ipairs(reactorIDs) do
+        local reactorName = reactorOutputLog[reactorID].reactorName or "Reactor " .. index
+        reactorTable[reactorID] = {id = reactorID, name = reactorName}
+        repo.set(reactorID .. "_state", false)  -- Assuming reactors start off
+        reactors[reactorID] = {
+            reactorName = reactorName,
+            temp = "N/A",
+            active = false,
+            euOutput = "0",
+            fuelRemaining = "N/A",
+            isMaintenance = false,
+            overheating = false,
+            destroyed = false,
+            status = "unknown"
+        }
+    end
+
+    -- Compute the number of reactor pages
+    local totalReactors = #reactorIDs
+    local reactorsPerPage = 10  -- Adjust as needed
+    numReactorPages = math.ceil(totalReactors / reactorsPerPage)
+
+    -- Build pages list
+    pages = {
+        home = "Home Page"
+    }
+
+    for i = 1, numReactorPages do
+        pages["reactor" .. i] = "Reactor Status Page " .. i
+    end
+end
+
 -- Main function for receiving reactor data and handling button presses
 local function main()
     -- Load reactor output log
     loadReactorOutputLog()
+
+    -- Rebuild reactor data structures
+    rebuildReactorDataStructures()
 
     -- Load last power command and act accordingly
     local lastPowerCommand = loadLastPowerCommand()
@@ -357,12 +369,11 @@ local function main()
         reactorsOnDueToPESU = false
         -- Ensure reactors are off
         local reactorsTurnedOff = false
-        for _, reactor in pairs(reactorTable) do
-            local id = reactor.id
-            local state = repo.get(id .. "_state")
+        for _, reactorID in ipairs(reactorIDs) do
+            local state = repo.get(reactorID .. "_state")
             if state then
-                repo.set(id .. "_state", false)
-                rednet.send(id, {command = "turn_off"})
+                repo.set(reactorID .. "_state", false)
+                rednet.send(reactorID, {command = "turn_off"})
                 reactorsTurnedOff = true
             end
         end
@@ -400,12 +411,12 @@ local function main()
                             end
                         end
                         local reactorsChanged = false
-                        for _, reactor in pairs(reactorTable) do
-                            local id = reactor.id
-                            local state = repo.get(id .. "_state")
+                        for _, reactorID in ipairs(reactorIDs) do
+                            local id = reactorID
                             local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                             if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                                 repo.set(id .. "_state", anyReactorOff)
+                                reactors[id].active = anyReactorOff  -- Update the reactors table
                                 if anyReactorOff then
                                     rednet.send(id, {command = "turn_on"})
                                 else
@@ -422,34 +433,30 @@ local function main()
                         local reactorsChanged = false
                         if not reactorsOnDueToPESU or not anyPlayerOnline then
                             -- Turn off reactors
-                            for _, reactor in pairs(reactorTable) do
-                                local id = reactor.id
+                            for _, reactorID in ipairs(reactorIDs) do
+                                local id = reactorID
                                 local state = repo.get(id .. "_state")
                                 if state then
                                     repo.set(id .. "_state", false)
+                                    reactors[id].active = false  -- Update the reactors table
                                     rednet.send(id, {command = "turn_off"})
                                     reactorsChanged = true
                                 end
                             end
-                            if reactorsChanged then
-                                sendReactorStatus("off")
-                            end
                         else
                             -- Turn on reactors
-                            for _, reactor in pairs(reactorTable) do
-                                local id = reactor.id
+                            for _, reactorID in ipairs(reactorIDs) do
+                                local id = reactorID
                                 local state = repo.get(id .. "_state")
                                 local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                                     if not state then
                                         repo.set(id .. "_state", true)
+                                        reactors[id].active = true  -- Update the reactors table
                                         rednet.send(id, {command = "turn_on"})
                                         reactorsChanged = true
                                     end
                                 end
-                            end
-                            if reactorsChanged then
-                                sendReactorStatus("on")
                             end
                         end
                         -- Update display
@@ -470,56 +477,82 @@ local function main()
                 elseif senderID == powerMainframeID then
                     -- Handle messages from the power mainframe
                     handlePowerMainframeMessage(message)
-                elseif isReactorID(senderID) then
+                else
                     -- Handle messages from reactors
                     if type(message) == "table" and message.id then
+                        local reactorID = message.id
+                        -- Check if reactor is new
+                        if not reactors[reactorID] then
+                            print("New reactor detected: " .. reactorID)
+                            -- Add reactor to reactorOutputLog
+                            reactorOutputLog[reactorID] = {
+                                reactorName = message.reactorName,
+                                maxOutput = tonumber(message.euOutput) or 0
+                            }
+                            saveReactorOutputLog()
+                            -- Rebuild reactor data structures
+                            rebuildReactorDataStructures()
+                            -- Re-bind reactor buttons
+                            ui.bindReactorButtons(reactorTable, repo)
+                            -- Update the display
+                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+                        end
+
                         -- Store the latest reactor data
-                        reactors[message.id] = message
+                        reactors[reactorID] = reactors[reactorID] or {}
+                        for k, v in pairs(message) do
+                            reactors[reactorID][k] = v
+                        end
 
                         -- Handle reactor status
                         if message.status == "Destroyed" then
-                            reactors[message.id].destroyed = true
-                            reactors[message.id].status = "Destroyed"
-                            reactors[message.id].active = false
+                            reactors[reactorID].destroyed = true
+                            reactors[reactorID].status = "Destroyed"
+                            reactors[reactorID].active = false
                             -- Update reactor state in repo
-                            repo.set(message.id .. "_state", false)
+                            repo.set(reactorID .. "_state", false)
                         else
-                            reactors[message.id].destroyed = false
-                            reactors[message.id].status = message.status or "online"
+                            reactors[reactorID].destroyed = false
+                            reactors[reactorID].status = message.status or "online"
                             -- Update reactor state in repo
-                            repo.set(message.id .. "_state", message.active)
+                            repo.set(reactorID .. "_state", message.active)
                         end
 
                         -- Check for maintenance mode
                         if string.find(message.reactorName, "-M") then
-                            reactors[message.id].isMaintenance = true
+                            reactors[reactorID].isMaintenance = true
                         else
-                            reactors[message.id].isMaintenance = false
+                            reactors[reactorID].isMaintenance = false
                         end
 
                         -- Check for overheating only if reactor is not destroyed
-                        if not reactors[message.id].destroyed then
+                        if not reactors[reactorID].destroyed then
                             local tempString = (message.temp or ""):gsub("[^%d%.]", "")
                             local temp = tonumber(tempString)
                             if temp and temp > 4500 then
-                                reactors[message.id].overheating = true
+                                reactors[reactorID].overheating = true
                                 -- Send command to turn off reactor
-                                rednet.send(message.id, {command = "turn_off"})
+                                rednet.send(reactorID, {command = "turn_off"})
                                 -- Update state in repo
-                                repo.set(message.id .. "_state", false)
-                                print("Reactor " .. message.id .. " is overheating! Shutting down.")
+                                repo.set(reactorID .. "_state", false)
+                                print("Reactor " .. reactorID .. " is overheating! Shutting down.")
                             elseif temp and temp < 3000 then
                                 -- Clear overheating flag if temp is below threshold
-                                reactors[message.id].overheating = false
+                                reactors[reactorID].overheating = false
                             end
                         end
 
-                        -- Save reactor output if euOutput > 1 and not already stored
-                        if not reactors[message.id].destroyed then
+                        -- Save reactor output if euOutput > 1 and update maxOutput if higher
+                        if not reactors[reactorID].destroyed then
                             local euOutputNum = tonumber(message.euOutput)
                             if euOutputNum and euOutputNum > 1 then
-                                if not reactorOutputLog[message.id] then
-                                    reactorOutputLog[message.id] = {
+                                if reactorOutputLog[reactorID] then
+                                    if euOutputNum > reactorOutputLog[reactorID].maxOutput then
+                                        reactorOutputLog[reactorID].maxOutput = euOutputNum
+                                        saveReactorOutputLog()
+                                    end
+                                else
+                                    reactorOutputLog[reactorID] = {
                                         reactorName = message.reactorName,
                                         maxOutput = euOutputNum
                                     }
@@ -530,12 +563,13 @@ local function main()
 
                         -- Update display if on reactor page
                         local index = 0
-                        for idx, reactorID in ipairs(reactorIDs) do
-                            if reactorID == message.id then
+                        for idx, id in ipairs(reactorIDs) do
+                            if id == reactorID then
                                 index = idx
                                 break
                             end
                         end
+                        local reactorsPerPage = 10
                         local pageNum = math.ceil(index / reactorsPerPage)
                         if currentPage == "reactor" .. pageNum then
                             ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
@@ -546,10 +580,8 @@ local function main()
                             ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
                         end
                     else
-                        print("Invalid message received from reactor ID:", senderID)
+                        print("Received message from unknown sender ID:", senderID)
                     end
-                else
-                    print("Received message from unknown sender ID:", senderID)
                 end
             end
         end
