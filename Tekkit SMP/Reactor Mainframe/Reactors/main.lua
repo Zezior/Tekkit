@@ -348,8 +348,10 @@ local function main()
                     if type(message) == "table" and message.id then
                         -- Store the latest reactor data
                         reactors[message.id] = message
-                        print("Reactor data received for ID:", message.id)
-                        print("Message content:", textutils.serialize(message))
+                        -- Suppress console output for reactor data
+                        -- Remove or comment out the following lines:
+                        -- print("Reactor data received for ID:", message.id)
+                        -- print("Message content:", textutils.serialize(message))
 
                         -- Handle reactor status
                         if message.status == "Destroyed" then
@@ -399,7 +401,8 @@ local function main()
                                         maxOutput = euOutputNum
                                     }
                                     saveReactorOutputLog()
-                                    print("Stored reactor output for ID:", message.id)
+                                    -- Suppress this print statement
+                                    -- print("Stored reactor output for ID:", message.id)
                                 end
                             end
                         end
@@ -425,7 +428,7 @@ local function main()
                         print("Invalid message received from reactor ID:", senderID)
                     end
                 else
-                    print("Unauthorized sender ID:", senderID)
+                    print("Received message from unknown sender ID:", senderID)
                 end
             end
         end
