@@ -1,4 +1,5 @@
 -- ui.lua
+
 local monitor = peripheral.wrap("right")
 local style = require("style")
 monitor.setTextScale(style.style.textScale)
@@ -51,25 +52,18 @@ end
 function Button:handlePress()
     if self.reactorID then
         -- Reactor control button
-        print("Button pressed for reactorID:", self.reactorID)
         local id = self.reactorID
         local currentState = repo.get(id .. "_state")
         local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
 
         -- Check if reactor is destroyed
         if reactorData.destroyed then
-            print("Cannot control reactor " .. id .. " because it is destroyed.")
             return
         end
 
         -- Check if reactor is overheating or in maintenance mode
         if reactorData.overheating then
-            print("Cannot turn on reactor " .. id .. " because it is overheating.")
             return
-        end
-        if reactorData.isMaintenance then
-            print("Reactor " .. id .. " is in maintenance mode.")
-            -- Allow individual control even in maintenance mode
         end
 
         -- Toggle the reactor state
@@ -78,7 +72,6 @@ function Button:handlePress()
 
         -- Send the turn_on/turn_off command via Rednet to the correct reactor ID
         rednet.send(self.reactorID, {command = newState and "turn_on" or "turn_off"})
-        print("Sent command to reactor:", self.reactorID, "New State:", newState)
 
         -- Update the button's appearance immediately based on the new state
         self.text = newState and "Off" or "On"
@@ -122,11 +115,6 @@ end
 
 -- Function to bind the reactor state to button updates
 function bindReactorButtons(reactorTable, passedRepo)
-    -- Check if reactorTable and repo are valid tables
-    if type(reactorTable) ~= "table" or type(passedRepo) ~= "table" then
-        error("Invalid reactorTable or repo passed to bindReactorButtons")
-    end
-
     reactorIDs = reactorTable -- Assign the reactorIDs table passed from main.lua
     repo = passedRepo  -- Assign the passed repo object
 
@@ -187,7 +175,6 @@ end
 -- Function to add reactor control buttons dynamically based on reactor status
 function addReactorControlButtons(reactorID, status, x, y, data, buttonWidth)
     buttonWidth = buttonWidth or 6  -- Default button width if not provided
-    print("Adding button for reactorID:", reactorID, "at position:", x, y)
     local buttonText = status and "Off" or "On"
     local buttonColor = status and colors.red or colors.green
 
@@ -231,7 +218,7 @@ function displayReactorLists()
 
     -- Display Overheating Reactors
     monitor.setCursorPos(xOverheating, yStart)
-    monitor.setTextColor(colors.yellow)  -- Changed to yellow
+    monitor.setTextColor(colors.yellow)
     monitor.write("Overheating Reactors")
     local y = yStart + 1
     for id, reactor in pairs(reactors) do
@@ -245,8 +232,8 @@ function displayReactorLists()
 
     -- Display Reactor Maintenance
     monitor.setCursorPos(xMaintenance, yStart)
-    monitor.setTextColor(colors.blue)  -- Changed to blue
-    monitor.write("Reactor Maintenance")  -- Renamed
+    monitor.setTextColor(colors.blue)
+    monitor.write("Reactor Maintenance")
     y = yStart + 1
     for id, reactor in pairs(reactors) do
         if reactor.isMaintenance then
@@ -259,7 +246,7 @@ function displayReactorLists()
 
     -- Display Destroyed Reactors
     monitor.setCursorPos(xDestroyed, yStart)
-    monitor.setTextColor(colors.red)  -- Changed to red
+    monitor.setTextColor(colors.red)
     monitor.write("Destroyed Reactors")
     y = yStart + 1
     for id, reactor in pairs(reactors) do
@@ -347,7 +334,7 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
         end
     end
 
-    -- Format outputs (e.g., display in k EU/t)
+    -- Format outputs
     local function formatEUOutput(value)
         if value >= 1000000 then
             return string.format("%.2f M EU/t", value / 1000000)
@@ -419,7 +406,7 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.write(string.rep(" ", filledBars))
 
     -- Write percentage over the progress bar
-    monitor.setBackgroundColor(colors.black)  -- Set background to black for percentage text
+    monitor.setBackgroundColor(colors.black)
     monitor.setTextColor(colors.white)
     local percentageText = string.format("%.2f%%", fillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
@@ -434,11 +421,68 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     centerButtons("home", pages.numReactorPages)
 end
 
+-- Function to display reactor data pages
+function displayReactorData(reactorsPassed, pageNum, numReactorPagesPassed, reactorIDsPassed)
+    resetButtons()
+    reactors = reactorsPassed
+    pages.numReactorPages = numReactorPagesPassed
+    reactorIDs = reactorIDsPassed
+    style.applyStyle()
+    monitor.clear()
+
+    -- Display reactor data for the given page
+    local reactorsPerPage = 8
+    local startIdx = (pageNum - 1) * reactorsPerPage + 1
+    local endIdx = math.min(startIdx + reactorsPerPage - 1, #reactorIDs)
+
+    -- Header
+    local header = "Reactor Status Page " .. pageNum
+    local xHeader = math.floor((w - #header) / 2) + 1
+    monitor.setCursorPos(xHeader, 1)
+    monitor.setTextColor(colors.green)
+    monitor.write(header)
+    monitor.setTextColor(style.style.textColor)
+
+    local y = 3  -- Starting y position
+    for idx = startIdx, endIdx do
+        local reactorID = reactorIDs[idx].id
+        local reactor = reactors[reactorID]
+        if reactor then
+            -- Display reactor info
+            monitor.setCursorPos(2, y)
+            monitor.write("Reactor " .. idx .. ": " .. reactor.reactorName)
+            y = y + 1
+            monitor.setCursorPos(4, y)
+            monitor.write("Status: " .. (reactor.active and "Active" or "Inactive"))
+            y = y + 1
+            monitor.setCursorPos(4, y)
+            monitor.write("Temp: " .. reactor.temp)
+            y = y + 1
+            monitor.setCursorPos(4, y)
+            monitor.write("EU Output: " .. reactor.euOutput)
+            y = y + 2  -- Add extra space
+
+            -- Add control button for reactor
+            local buttonX = w - 10
+            local buttonY = y - 4
+            addReactorControlButtons(reactorID, reactor.active, buttonX, buttonY, reactor)
+        else
+            monitor.setCursorPos(2, y)
+            monitor.write("Reactor " .. idx .. ": Data not available")
+            y = y + 2
+        end
+    end
+
+    -- Add navigation buttons
+    centerButtons("reactor" .. pageNum, pages.numReactorPages)
+end
+
 return {
     bindReactorButtons = bindReactorButtons,
     detectButtonPress = detectButtonPress,
     addReactorControlButtons = addReactorControlButtons,
     displayHomePage = displayHomePage,
+    displayReactorData = displayReactorData,
     centerButtons = centerButtons,
     resetButtons = resetButtons
 }

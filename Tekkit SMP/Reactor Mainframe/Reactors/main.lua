@@ -1,4 +1,4 @@
--- Reactor Mainframe - main.lua
+-- main.lua
 
 local ui = require("ui")
 local ids = require("ids")
@@ -6,10 +6,8 @@ local ids = require("ids")
 local reactorIDs = ids.reactorIDs
 local activityCheckID = ids.activityCheckID
 local powerMainframeID = ids.powerMainframeID
-local reactorMainframeID = ids.reactorMainframeID
 
-table.sort(reactorIDs)
-local minReactorID = reactorIDs[1] or 0
+table.sort(reactorIDs, function(a, b) return a.id < b.id end)
 
 local currentPage = "home"  -- Start on the home page
 local reactors = {}  -- Table to store reactor data
@@ -51,8 +49,8 @@ rednet.open("top")  -- Adjust the side as needed for the modem
 
 -- Dynamically generate the reactorTable based on reactorIDs
 local reactorTable = {}
-for index, id in ipairs(reactorIDs) do
-    reactorTable["Reactor" .. index] = {id = id, name = "Reactor " .. index}
+for index, reactorData in ipairs(reactorIDs) do
+    reactorTable["Reactor" .. index] = {id = reactorData.id, name = "Reactor " .. index}
 end
 
 -- Initialize reactor states in the repo and reactors table
@@ -99,39 +97,6 @@ local function saveReactorOutputLog()
     end
 end
 
--- Function to load power log from file
-local function loadPowerLog()
-    if fs.exists("power_log.txt") then
-        local file = fs.open("power_log.txt", "r")
-        if file then
-            local lastLine = nil
-            repeat
-                local line = file.readLine()
-                if line then
-                    lastLine = line
-                end
-            until not line
-            file.close()
-            if lastLine == "turn_on" then
-                reactorsOnDueToPESU = true
-            else
-                reactorsOnDueToPESU = false
-            end
-        end
-    else
-        reactorsOnDueToPESU = false
-    end
-end
-
--- Function to save power log to file
-local function savePowerLog(action)
-    local file = fs.open("power_log.txt", "a")
-    if file then
-        file.writeLine(action)
-        file.close()
-    end
-end
-
 -- Function to request data from all reactors on startup
 local function requestReactorData()
     for _, reactor in pairs(reactorTable) do
@@ -141,7 +106,7 @@ end
 
 -- Compute the number of reactor pages
 local totalReactors = #reactorIDs
-local reactorsPerPage = 8  -- Updated to match reactors.lua
+local reactorsPerPage = 8
 local numReactorPages = math.ceil(totalReactors / reactorsPerPage)
 
 -- Build pages list
@@ -155,8 +120,8 @@ end
 
 -- Check if senderID is in the reactor IDs list
 local function isReactorID(senderID)
-    for _, id in ipairs(reactorIDs) do
-        if id == senderID then
+    for _, reactorData in ipairs(reactorIDs) do
+        if reactorData.id == senderID then
             return true
         end
     end
@@ -171,7 +136,7 @@ local function switchPage(page)
     if pages[page] then
         currentPage = page
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
         elseif string.sub(currentPage, 1, 7) == "reactor" then
             -- Extract page number
             local pageNumString = string.sub(currentPage, 8)
@@ -220,7 +185,7 @@ local function handleActivityCheckMessage(message)
 
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
         end
     elseif message.command == "player_offline" then
         print("Received player_offline command from activity check computer.")
@@ -237,7 +202,7 @@ local function handleActivityCheckMessage(message)
         sendReactorStatus("off")
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
         end
     elseif message.command == "check_players" then
         -- Send player online status to the requester
@@ -252,7 +217,6 @@ local function handlePowerMainframeMessage(message)
     if message.command == "turn_on_reactors" then
         print("Received turn_on_reactors command from power mainframe.")
         reactorsOnDueToPESU = true
-        savePowerLog("turn_on")
         -- Turn on reactors only if players are online
         if anyPlayerOnline then
             for _, reactor in pairs(reactorTable) do
@@ -273,7 +237,6 @@ local function handlePowerMainframeMessage(message)
     elseif message.command == "turn_off_reactors" then
         print("Received turn_off_reactors command from power mainframe.")
         reactorsOnDueToPESU = false
-        savePowerLog("turn_off")
         -- Turn off all reactors
         for _, reactor in pairs(reactorTable) do
             local id = reactor.id
@@ -286,12 +249,11 @@ local function handlePowerMainframeMessage(message)
         sendReactorStatus("off")
     else
         -- Ignore unknown commands from power mainframe
-        -- Suppress the "Unknown command" message
     end
 
     -- Update the display
     if currentPage == "home" then
-        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
     end
 end
 
@@ -300,20 +262,14 @@ local function main()
     -- Load reactor output log
     loadReactorOutputLog()
 
-    -- Load power log
-    loadPowerLog()
-
     -- Display the home page initially
-    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
 
     -- Bind reactor buttons using repo
     ui.bindReactorButtons(reactorTable, repo)
 
     -- Request data from all reactors on startup
     requestReactorData()
-
-    -- Do not turn on reactors based on power log if they were manually turned on before restart
-    reactorsOnDueToPESU = false
 
     -- Handle button presses and reactor data in parallel
     parallel.waitForAny(
@@ -349,26 +305,11 @@ local function main()
                         end
                         -- Reset reactorsOnDueToPESU to false
                         reactorsOnDueToPESU = false
-                        savePowerLog("turn_off")
                         sendReactorStatus(anyReactorOff and "on" or "off")
                         -- Update display
-                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
-                    elseif action == "reactor1" then
-                        switchPage("reactor1")
-                    elseif action == "prev_page" then
-                        local pageNum = tonumber(string.sub(currentPage, 8))
-                        if pageNum > 1 then
-                            switchPage("reactor" .. (pageNum - 1))
-                        end
-                    elseif action == "next_page" then
-                        local pageNum = tonumber(string.sub(currentPage, 8))
-                        if pageNum < numReactorPages then
-                            switchPage("reactor" .. (pageNum + 1))
-                        end
-                    elseif action == "home" then
-                        switchPage("home")
+                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
                     else
-                        -- Handle other actions if necessary
+                        switchPage(action)  -- Switch pages based on the action
                     end
                 end
             end
@@ -389,7 +330,6 @@ local function main()
                     if type(message) == "table" and message.id then
                         -- Store the latest reactor data
                         reactors[message.id] = message
-                        -- Suppress console output for reactor data
 
                         -- Handle reactor status
                         if message.status == "Destroyed" then
@@ -439,15 +379,14 @@ local function main()
                                         maxOutput = euOutputNum
                                     }
                                     saveReactorOutputLog()
-                                    -- Suppress this print statement
                                 end
                             end
                         end
 
                         -- Update display if on reactor page
                         local index = 0
-                        for idx, rid in ipairs(reactorIDs) do
-                            if rid == message.id then
+                        for idx, reactorData in ipairs(reactorIDs) do
+                            if reactorData.id == message.id then
                                 index = idx
                                 break
                             end
@@ -459,7 +398,7 @@ local function main()
 
                         -- Update home page if necessary
                         if currentPage == "home" then
-                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
                         end
                     else
                         print("Invalid message received from reactor ID:", senderID)
