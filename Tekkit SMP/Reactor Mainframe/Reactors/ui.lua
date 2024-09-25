@@ -180,7 +180,7 @@ end
 
 -- Function to add reactor control buttons dynamically based on reactor status
 function addReactorControlButtons(reactorID, status, x, y, data, buttonWidth)
-    buttonWidth = buttonWidth or 6  -- Default button width if not provided
+    buttonWidth = buttonWidth or 5  -- Adjusted button width
     local buttonText = status and "Off" or "On"
     local buttonColor = status and colors.red or colors.green
 
@@ -222,31 +222,41 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
     monitor.write(header)
     monitor.setTextColor(style.style.textColor)
 
-    -- Display reactor data per page
-    local reactorsPerPage = 8
+    -- Display reactors per page
+    local reactorsPerPage = 18  -- 6 reactors per column, 3 columns
     local startIdx = (pageNum - 1) * reactorsPerPage + 1
     local endIdx = math.min(startIdx + reactorsPerPage -1, #reactorIDs)
-    local y = 3
+
+    local reactorsPerColumn = 6
+    local columns = 3
+    local columnWidth = math.floor(w / columns)
 
     for idx = startIdx, endIdx do
         local reactorID = reactorIDs[idx]
         local reactorData = reactors[reactorID]
         if reactorData then
-            monitor.setCursorPos(2, y)
+            -- Determine column and row
+            local reactorIndexOnPage = idx - startIdx
+            local column = math.floor(reactorIndexOnPage / reactorsPerColumn) + 1
+            local row = (reactorIndexOnPage % reactorsPerColumn) + 1
+
+            local x = (column - 1) * columnWidth + 2  -- Adjust 2 for padding
+            local y = 3 + (row - 1) * 6  -- Adjust vertical spacing
+
+            -- Add reactor control button to the left
+            local buttonX = x
+            local buttonY = y
+            addReactorControlButtons(reactorID, reactorData.active, buttonX, buttonY, reactorData)
+
+            -- Display reactor info
+            monitor.setCursorPos(x + 6, y)
             monitor.write("Reactor " .. idx .. ": " .. reactorData.reactorName)
-            y = y + 1
-            monitor.setCursorPos(4, y)
+            monitor.setCursorPos(x + 6, y +1)
             monitor.write("Status: " .. (reactorData.active and "Active" or "Inactive"))
-            y = y + 1
-            monitor.setCursorPos(4, y)
+            monitor.setCursorPos(x + 6, y +2)
             monitor.write("Temp: " .. reactorData.temp)
-            y = y + 1
-            monitor.setCursorPos(4, y)
+            monitor.setCursorPos(x + 6, y +3)
             monitor.write("EU Output: " .. reactorData.euOutput)
-            y = y + 1
-            -- Add reactor control button
-            addReactorControlButtons(reactorID, reactorData.active, w - 10, y - 4, reactorData)
-            y = y + 1  -- Extra space between reactors
         end
     end
 
@@ -255,7 +265,7 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
 end
 
 -- Function to display the home page
-function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed)
+function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESU)
     resetButtons()
     repo = repoPassed
     reactorIDs = reactorTablePassed
@@ -285,63 +295,8 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     local masterButtonText = anyReactorOff and "All On" or "All Off"
     local masterButtonColor = anyReactorOff and colors.green or colors.red
 
-    -- Add master on/off button in the bottom left corner
-    local masterButton = Button:new(nil, 2, h - 7, 8, 3, masterButtonText, masterButtonColor, "toggle_all")
-    masterButton:draw()
-    table.insert(buttonList, masterButton)
-
-    -- Display overheating, maintenance, and destroyed reactors lists
-    displayReactorLists()
-
-    -- Compute total operational reactors and active reactors
-    local totalOperationalReactors = 0
-    local activeReactors = 0
-
-    for _, reactor in pairs(reactors) do
-        if not reactor.isMaintenance and not reactor.destroyed then
-            totalOperationalReactors = totalOperationalReactors + 1
-            if reactor.active then
-                activeReactors = activeReactors + 1
-            end
-        end
-    end
-
-    -- Calculate the fill percentage for the progress bar
-    local fillPercentage = 0
-    if totalOperationalReactors > 0 then
-        fillPercentage = (activeReactors / totalOperationalReactors) * 100
-    end
-
-    -- Compute total reactor output
-    local totalReactorOutput = 0
-    for id, data in pairs(reactorOutputLog) do
-        totalReactorOutput = totalReactorOutput + data.maxOutput
-    end
-
-    -- Compute current reactor output
-    local currentReactorOutput = 0
-    for id, reactor in pairs(reactors) do
-        if reactor.active and not reactor.isMaintenance and not reactor.destroyed then
-            local euOutputNum = tonumber(reactor.euOutput)
-            if euOutputNum then
-                currentReactorOutput = currentReactorOutput + euOutputNum
-            end
-        end
-    end
-
-    -- Format outputs (e.g., display in k EU/t)
-    local function formatEUOutput(value)
-        if value >= 1000000 then
-            return string.format("%.2f M EU/t", value / 1000000)
-        elseif value >= 1000 then
-            return string.format("%.0f k EU/t", value / 1000)
-        else
-            return string.format("%.0f EU/t", value)
-        end
-    end
-
     -- Positions
-    local progressBarY = h - 7
+    local progressBarY = h - 12  -- Adjusted to make room for the button
     local currentOutputY = progressBarY - 2
     local totalOutputY = currentOutputY - 1
 
@@ -357,7 +312,10 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     local statusText = reactorsAreOn and "Reactors Are ON" or "Reactors Are OFF"
     local statusColor = reactorsAreOn and colors.green or colors.red
     monitor.setTextColor(statusColor)
-    monitor.setCursorPos(1, totalOutputY - 1)
+
+    -- Center the status text
+    local xStatus = math.floor((w - #statusText) / 2) + 1
+    monitor.setCursorPos(xStatus, totalOutputY - 1)
     monitor.write(statusText)
     monitor.setTextColor(style.style.textColor)
 
@@ -428,6 +386,15 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.setBackgroundColor(style.style.backgroundColor)
     monitor.setTextColor(style.style.textColor)
 
+    -- Add master on/off button below the progress bar
+    local masterButtonY = progressBarY + 4  -- Position below the progress bar
+    local masterButton = Button:new(nil, 2, masterButtonY, 8, 3, masterButtonText, masterButtonColor, "toggle_all")
+    masterButton:draw()
+    table.insert(buttonList, masterButton)
+
+    -- Display overheating, maintenance, and destroyed reactors lists
+    displayReactorLists()
+
     -- Call the centerButtons function to display buttons at the bottom
     centerButtons("home", pages.numReactorPages)
 end
@@ -491,6 +458,39 @@ function displayReactorLists()
     end
 end
 
+-- Function to format EU output
+function formatEUOutput(value)
+    if value >= 1000000 then
+        return string.format("%.2f M EU/t", value / 1000000)
+    elseif value >= 1000 then
+        return string.format("%.0f k EU/t", value / 1000)
+    else
+        return string.format("%.0f EU/t", value)
+    end
+end
+
+-- Function to compute total outputs
+function computeOutputs()
+    -- Compute total reactor output
+    local totalReactorOutput = 0
+    for id, data in pairs(reactorOutputLog) do
+        totalReactorOutput = totalReactorOutput + data.maxOutput
+    end
+
+    -- Compute current reactor output
+    local currentReactorOutput = 0
+    for id, reactor in pairs(reactors) do
+        if reactor.active and not reactor.isMaintenance and not reactor.destroyed then
+            local euOutputNum = tonumber(reactor.euOutput)
+            if euOutputNum then
+                currentReactorOutput = currentReactorOutput + euOutputNum
+            end
+        end
+    end
+
+    return totalReactorOutput, currentReactorOutput
+end
+
 return {
     bindReactorButtons = bindReactorButtons,
     detectButtonPress = detectButtonPress,
@@ -499,5 +499,7 @@ return {
     displayReactorData = displayReactorData,
     centerButtons = centerButtons,
     resetButtons = resetButtons,
-    displayReactorLists = displayReactorLists
+    displayReactorLists = displayReactorLists,
+    formatEUOutput = formatEUOutput,
+    computeOutputs = computeOutputs
 }
