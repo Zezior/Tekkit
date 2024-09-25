@@ -189,6 +189,11 @@ local function switchPage(page)
     end
 end
 
+-- Function to send reactor status to power mainframe
+local function sendReactorStatus(status)
+    rednet.broadcast({command = "reactor_status", status = status}, "reactor_control")
+end
+
 -- Function to handle messages from the activity check computer
 local function handleActivityCheckMessage(message)
     if message.command == "player_online" then
@@ -208,6 +213,7 @@ local function handleActivityCheckMessage(message)
                     end
                 end
             end
+            sendReactorStatus("on")
         else
             print("Reactors are not turned on due to PESU levels.")
         end
@@ -228,6 +234,7 @@ local function handleActivityCheckMessage(message)
                 rednet.send(id, {command = "turn_off"})
             end
         end
+        sendReactorStatus("off")
         -- Update the display
         if currentPage == "home" then
             ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
@@ -259,6 +266,7 @@ local function handlePowerMainframeMessage(message)
                     end
                 end
             end
+            sendReactorStatus("on")
         else
             print("Players are offline. Reactors will not be turned on.")
         end
@@ -275,6 +283,7 @@ local function handlePowerMainframeMessage(message)
                 rednet.send(id, {command = "turn_off"})
             end
         end
+        sendReactorStatus("off")
     else
         print("Unknown command from power mainframe:", message.command)
     end
@@ -302,25 +311,10 @@ local function main()
     -- Request data from all reactors on startup
     requestReactorData()
 
-    -- Check if reactors should be turned on based on power log and player activity
-    if reactorsOnDueToPESU and anyPlayerOnline then
-        print("Reactors were previously turned on and players are online. Turning on reactors.")
-        for _, reactor in pairs(reactorTable) do
-            local id = reactor.id
-            local state = repo.get(id .. "_state")
-            local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
-            if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
-                if not state then
-                    repo.set(id .. "_state", true)
-                    rednet.send(id, {command = "turn_on"})
-                end
-            end
-        end
-    else
-        print("Reactors will remain off on startup.")
-    end
+    -- Do not turn on reactors based on power log if they were manually turned on before restart
+    reactorsOnDueToPESU = false
 
-    -- Listen for button presses and reactor data in parallel
+    -- Handle button presses and reactor data in parallel
     parallel.waitForAny(
         function()
             -- Handle button presses
@@ -328,7 +322,39 @@ local function main()
                 local event, side, x, y = os.pullEvent("monitor_touch")
                 local action = ui.detectButtonPress(x, y)
                 if action then
-                    switchPage(action)  -- Switch pages based on the action
+                    if action == "toggle_all" then
+                        -- Toggle all reactors regardless of PESU requirement
+                        local anyReactorOff = false
+                        for _, reactorData in pairs(reactors) do
+                            if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+                                if not reactorData.active then
+                                    anyReactorOff = true
+                                    break
+                                end
+                            end
+                        end
+                        for _, reactor in pairs(reactorTable) do
+                            local id = reactor.id
+                            local state = repo.get(id .. "_state")
+                            local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+                            if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+                                repo.set(id .. "_state", anyReactorOff)
+                                if anyReactorOff then
+                                    rednet.send(id, {command = "turn_on"})
+                                else
+                                    rednet.send(id, {command = "turn_off"})
+                                end
+                            end
+                        end
+                        -- Reset reactorsOnDueToPESU to false
+                        reactorsOnDueToPESU = false
+                        savePowerLog("turn_off")
+                        sendReactorStatus(anyReactorOff and "on" or "off")
+                        -- Update display
+                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+                    else
+                        switchPage(action)  -- Switch pages based on the action
+                    end
                 end
             end
         end,
@@ -349,7 +375,6 @@ local function main()
                         -- Store the latest reactor data
                         reactors[message.id] = message
                         -- Suppress console output for reactor data
-                        -- Remove or comment out the following lines:
                         -- print("Reactor data received for ID:", message.id)
                         -- print("Message content:", textutils.serialize(message))
 

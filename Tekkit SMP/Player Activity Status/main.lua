@@ -4,6 +4,16 @@ local monitorSide = "right"
 local modemSide = "front"
 local monitor = peripheral.wrap(monitorSide)
 
+-- Set custom background color
+local bgColor = colors.brown  -- Using 'colors.brown' as the slot for custom color
+monitor.setPaletteColor(bgColor, 18 / 255, 53 / 255, 36 / 255)  -- RGB values for #123524
+
+-- Apply background color and text settings
+monitor.setBackgroundColor(bgColor)
+monitor.setTextColor(colors.white)
+monitor.setTextScale(0.5)
+monitor.clear()
+
 -- List of introspection modules and corresponding player names
 local introspectionModules = {
     {side = "top", name = "ReactorKing"},
@@ -90,6 +100,7 @@ local function displayToMonitor(lines)
             monitor.write(centerText(line, w - 2))
         end
     end
+    monitor.setTextColor(colors.white)
 end
 
 local function waitForChunksToLoad(seconds, status)
@@ -113,6 +124,17 @@ local function waitForChunksToLoad(seconds, status)
                 rednet.send(senderID, {playersOnline = anyOnline}, "player_status")
             end
         end
+    end
+end
+
+local function sendPlayerStatus()
+    while true do
+        if anyOnline then
+            rednet.broadcast({command = "player_online"}, "reactor_control")
+        else
+            rednet.broadcast({command = "player_offline"}, "reactor_control")
+        end
+        sleep(60)  -- Send status every 60 seconds
     end
 end
 
@@ -279,4 +301,4 @@ local function mainLoop()
 end
 
 -- Run the main function and message handler in parallel
-parallel.waitForAny(mainLoop, handleMessages)
+parallel.waitForAny(mainLoop, handleMessages, sendPlayerStatus)

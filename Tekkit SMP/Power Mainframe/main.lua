@@ -225,9 +225,6 @@ local function processPESUData()
             table.insert(pagesData[pageNum], pesuList[idx])
         end
     end
-
-    -- Debug print
-    print("Processed PESU Data. Total PESUs:", #pesuList)
 end
 
 -- Function to display the PESU Page
@@ -437,6 +434,15 @@ local function displayHomePage()
     monitor.setTextColor(colors.white)
 end
 
+-- Function to send reactor status to the reactor mainframe every 60 seconds
+local function sendReactorStatus()
+    while true do
+        -- Send message to reactor mainframe
+        rednet.broadcast({command = "reactor_status", status = reactorsStatus}, "reactor_control")
+        sleep(60)  -- Send status every 60 seconds
+    end
+end
+
 -- Main function for live page updates and data processing
 local function main()
     page = "home"  -- Ensure the page is set to "home" on start
@@ -486,7 +492,6 @@ local function main()
         function()  -- Handle Incoming Data
             while true do
                 local event, senderID, message, protocol = os.pullEvent("rednet_message")
-                print("Received message from ID:", senderID)
                 if type(message) == "table" and message.command then
                     if table.contains(allowedSenderIDs, senderID) then
                         if message.command == "pesu_data" then
@@ -494,16 +499,19 @@ local function main()
                             pesuDataFromSenders[senderID] = message
                             processPESUData()  -- Update data processing
                             displayNeedsRefresh = true
-                            print("Processed PESU data from sender ID:", senderID)
+                            -- Suppress console message
+                            -- print("Processed PESU data from sender ID:", senderID)
                         elseif message.command == "panel_data" then
                             -- Store the panel data from the sender
                             panelDataList[senderID] = message.panelDataList[1]
                             displayNeedsRefresh = true
-                            print("Processed panel data from sender ID:", senderID)
+                            -- Suppress console message
+                            -- print("Processed panel data from sender ID:", senderID)
                         elseif message.command == "reactor_status" then
                             reactorsStatus = message.status  -- "on" or "off"
                             displayNeedsRefresh = true
-                            print("Updated reactor status to:", reactorsStatus)
+                            -- Suppress console message
+                            -- print("Updated reactor status to:", reactorsStatus)
                         else
                             print("Unknown command from sender ID:", senderID)
                         end
@@ -514,7 +522,8 @@ local function main()
                     print("Warning: Received malformed data from Sender ID:", senderID)
                 end
             end
-        end
+        end,
+        sendReactorStatus  -- Send reactor status every 60 seconds
     )
 end
 
