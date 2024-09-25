@@ -108,7 +108,7 @@ end
 
 -- Compute the number of reactor pages
 local totalReactors = #reactorIDs
-local reactorsPerPage = 18
+local reactorsPerPage = 10  -- Updated to match the new layout
 local numReactorPages = math.ceil(totalReactors / reactorsPerPage)
 
 -- Build pages list
@@ -159,6 +159,7 @@ end
 -- Function to send reactor status to power mainframe
 local function sendReactorStatus(status)
     rednet.send(powerMainframeID, {command = "reactor_status", status = status}, "reactor_control")
+    print("Sent reactor status to power mainframe:", status)
 end
 
 -- Function to handle messages from the activity check computer

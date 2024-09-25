@@ -155,35 +155,39 @@ end
 local function centerButtons(page, numReactorPages)
     local buttonWidth = 10
     local buttonHeight = 3
-    local totalButtons = 2 + numReactorPages  -- Home + All On/Off + reactor pages
+    local totalButtons = 1 + numReactorPages  -- Home + reactor pages
+    if page == "home" then
+        totalButtons = totalButtons + 1  -- Add one more for master button on home page
+    end
     local totalWidth = totalButtons * (buttonWidth + 2)
-    local startX = math.floor((w - totalWidth) / 2) + 1
+    local x = 2  -- Start from the left edge with some padding
 
-    local x = startX
     -- Define the Home button
     local homeButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, "Home", page == "home" and colors.green or colors.blue, "home")
     homeButton:draw()
     table.insert(buttonList, homeButton)
     x = x + buttonWidth + 2
 
-    -- Add master on/off button next to Home button
-    local anyReactorOff = false
-    for _, reactor in pairs(reactorIDs) do
-        local id = reactor.id
-        local state = repo.get(id .. "_state")
-        local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
-        if not state and not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
-            anyReactorOff = true
-            break
+    if page == "home" then
+        -- Add master on/off button next to Home button
+        local anyReactorOff = false
+        for _, reactor in pairs(reactorIDs) do
+            local id = reactor.id
+            local state = repo.get(id .. "_state")
+            local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+            if not state and not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+                anyReactorOff = true
+                break
+            end
         end
-    end
-    local masterButtonText = anyReactorOff and "All On" or "All Off"
-    local masterButtonColor = anyReactorOff and colors.green or colors.red
+        local masterButtonText = anyReactorOff and "All On" or "All Off"
+        local masterButtonColor = anyReactorOff and colors.green or colors.red
 
-    local masterButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, masterButtonText, masterButtonColor, "toggle_all")
-    masterButton:draw()
-    table.insert(buttonList, masterButton)
-    x = x + buttonWidth + 2
+        local masterButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, masterButtonText, masterButtonColor, "toggle_all")
+        masterButton:draw()
+        table.insert(buttonList, masterButton)
+        x = x + buttonWidth + 2
+    end
 
     -- Define Reactor page buttons
     for i = 1, numReactorPages do
@@ -327,7 +331,7 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
 
     -- Format outputs (e.g., display in k EU/t)
     -- Positions
-    local progressBarY = h - 7
+    local progressBarY = h - 7  -- Lower the progress bar back down
     local currentOutputY = progressBarY - 2
     local totalOutputY = currentOutputY - 1
 
