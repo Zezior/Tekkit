@@ -17,8 +17,12 @@ local allowedSenderIDs = ids.allowedSenderIDs
 local monitor = peripheral.wrap(monitorSide)
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
 
+-- Set custom background color
+local bgColor = colors.brown  -- Using 'colors.brown' as the slot for custom color
+monitor.setPaletteColor(bgColor, 18 / 255, 53 / 255, 36 / 255)  -- RGB values for #123524
+
 -- Clear the monitor fully on startup
-monitor.setBackgroundColor(colors.lightGray)
+monitor.setBackgroundColor(bgColor)
 monitor.clear()
 
 local buttonList = {}  -- Store buttons for click detection
@@ -89,7 +93,7 @@ end
 -- Function to draw a button
 local function drawButton(label, x, y, width, height, color)
     monitor.setBackgroundColor(color)
-    monitor.setTextColor(colors.lightGray)
+    monitor.setTextColor(colors.white)
     for i = 0, height - 1 do
         monitor.setCursorPos(x, y + i)
         monitor.write(string.rep(" ", width))
@@ -99,7 +103,7 @@ local function drawButton(label, x, y, width, height, color)
     local labelY = y + math.floor(height / 2)
     monitor.setCursorPos(labelX, labelY)
     monitor.write(label)
-    monitor.setBackgroundColor(colors.lightGray)
+    monitor.setBackgroundColor(bgColor)
 end
 
 -- Function to define a button
@@ -158,7 +162,7 @@ end
 
 -- Function to clear the monitor except for the buttons
 local function clearMonitorExceptButtons()
-    monitor.setBackgroundColor(colors.lightGray)
+    monitor.setBackgroundColor(bgColor)
     monitor.clear()
     -- Redraw buttons after clearing the screen
     for _, button in ipairs(buttonList) do
@@ -232,7 +236,7 @@ local function displayPESUPage(pesuData)
     -- Centered Title
     monitor.setTextColor(colors.green)
     centerText("NuclearCity Power Facility", titleY)
-    monitor.setTextColor(colors.black)
+    monitor.setTextColor(colors.white)
 
     -- Display PESUs
     if #pesuData == 0 then
@@ -269,7 +273,7 @@ local function displayPESUPage(pesuData)
         monitor.setCursorPos(percentageX, y)
         monitor.write(percentageStr)
     end
-    monitor.setTextColor(colors.black)
+    monitor.setTextColor(colors.white)
 end
 
 -- Function to display the Home Page
@@ -284,7 +288,7 @@ local function displayHomePage()
     -- Centered Title with green font
     monitor.setTextColor(colors.green)
     centerText("NuclearCity Power Facility", titleY)
-    monitor.setTextColor(colors.black)
+    monitor.setTextColor(colors.white)
 
     local leftColumnWidth = math.floor(w / 2)
     local rightColumnWidth = w - leftColumnWidth - 1
@@ -334,7 +338,7 @@ local function displayHomePage()
             monitor.setCursorPos(percentageX, leftColumnStartY + i)
             monitor.write(percentageStr)
         end
-        monitor.setTextColor(colors.black)
+        monitor.setTextColor(colors.white)
     end
 
     -- Right Column Title centered in right half
@@ -351,7 +355,7 @@ local function displayHomePage()
         monitor.write(msg)
     else
         for senderID, panelData in pairs(panelDataList) do
-            monitor.setTextColor(colors.black)
+            monitor.setTextColor(colors.white)
             monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #panelData.title) / 2), panelY)
             monitor.write(panelData.title)
             panelY = panelY + 1
@@ -367,7 +371,7 @@ local function displayHomePage()
             monitor.write(fillText)
             panelY = panelY + 2  -- Add extra space between panels
         end
-        monitor.setTextColor(colors.black)
+        monitor.setTextColor(colors.white)
     end
 
     -- Display reactor status above progress bar
@@ -379,7 +383,7 @@ local function displayHomePage()
         monitor.setTextColor(colors.red)
         centerText("Reactors are OFF", reactorStatusY)
     end
-    monitor.setTextColor(colors.black)
+    monitor.setTextColor(colors.white)
 
     -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = (totalStored / totalCapacity) * 100
@@ -413,15 +417,15 @@ local function displayHomePage()
     monitor.write(string.rep(" ", filledBars))
 
     -- Write percentage over the progress bar
-    monitor.setBackgroundColor(colors.lightGray)
-    monitor.setTextColor(colors.black)
+    monitor.setBackgroundColor(bgColor)
+    monitor.setTextColor(colors.white)
     local percentageText = formatPercentage(totalFillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
     monitor.setCursorPos(percentageX, progressBarY + 1)
     monitor.write(percentageText)
 
-    monitor.setBackgroundColor(colors.lightGray)
-    monitor.setTextColor(colors.black)
+    monitor.setBackgroundColor(bgColor)
+    monitor.setTextColor(colors.white)
 end
 
 -- Main function for live page updates and data processing
@@ -431,7 +435,7 @@ local function main()
     centerButtons()  -- Center the buttons at the start
 
     -- Clear the monitor fully on startup
-    monitor.setBackgroundColor(colors.lightGray)
+    monitor.setBackgroundColor(bgColor)
     monitor.clear()
 
     local displayNeedsRefresh = true  -- Flag to indicate display needs refresh
