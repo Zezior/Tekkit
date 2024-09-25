@@ -202,9 +202,10 @@ local function processPESUData()
     local currentTime = os.time()
 
     for senderID, data in pairs(pesuDataFromSenders) do
-        -- Process PESU data
+        print("Processing PESU data from sender ID:", senderID)
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
+                print("PESU Data:", pesuData.energy)
                 totalStored = totalStored + pesuData.energy  -- Stored EU
                 totalCapacity = totalCapacity + 1000000000  -- Fixed capacity 1,000,000,000
                 table.insert(pesuList, {
@@ -440,6 +441,41 @@ local function displayHomePage()
     monitor.setTextColor(colors.white)
 end
 
+-- Function to send commands to reactor mainframe
+local function sendCommand(command)
+    rednet.send(reactorMainframeID, {command = command}, "reactor_control")
+    print("Sent command to reactor mainframe:", command)
+end
+
+-- Function to monitor PESU levels and control reactors
+local function monitorPESU()
+    while true do
+        -- Calculate fill percentages
+        local anyPESUBelowThreshold = false
+        local allPESUAtFull = true
+
+        for _, pesu in ipairs(pesuList) do
+            local fillPercentage = (pesu.stored / pesu.capacity) * 100
+            if fillPercentage <= 0.01 then
+                anyPESUBelowThreshold = true
+            end
+            if fillPercentage < 100 then
+                allPESUAtFull = false
+            end
+        end
+
+        if anyPESUBelowThreshold and lastSentState ~= "turn_on_reactors" then
+            sendCommand("turn_on_reactors")
+            lastSentState = "turn_on_reactors"
+        elseif allPESUAtFull and lastSentState ~= "turn_off_reactors" then
+            sendCommand("turn_off_reactors")
+            lastSentState = "turn_off_reactors"
+        end
+
+        sleep(5)  -- Adjust sleep time as needed
+    end
+end
+
 -- Function to handle incoming data
 local function handleIncomingData()
     while true do
@@ -485,7 +521,7 @@ local function main()
     monitor.setBackgroundColor(bgColor)
     monitor.clear()
 
-    local displayNeedsRefresh = true  -- Flag to indicate display needs refresh
+    displayNeedsRefresh = true  -- Flag to indicate display needs refresh
 
     -- Start data processing and page refreshing in parallel
     parallel.waitForAny(
@@ -521,7 +557,8 @@ local function main()
                 sleep(0.05)  -- Allow for faster reaction to button presses
             end
         end,
-        handleIncomingData
+        handleIncomingData,
+        monitorPESU  -- Add monitorPESU function to parallel execution
     )
 end
 
