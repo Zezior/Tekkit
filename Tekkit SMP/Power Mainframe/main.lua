@@ -13,6 +13,12 @@ print("Mainframe Computer ID:", os.getComputerID())
 local ids = require("ids")
 local reactorMainframeID = ids.reactorMainframeID
 
+-- Define allowed sender IDs
+local allowedSenderIDs = {
+    reactorMainframeID,
+    -- Add other sender IDs as needed
+}
+
 -- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
@@ -228,7 +234,7 @@ local function processPESUData()
 end
 
 -- Function to display the PESU Page
-local function displayPESUPage(pesuData)
+function displayPESUPage(pesuData)
     clearMonitorExceptButtons()
 
     -- Adjusted positions
@@ -385,8 +391,7 @@ local function displayHomePage()
     -- Display total power capacity
     local capacityY = reactorStatusY + 1
     monitor.setTextColor(colors.white)
-    local capacityInBillions = totalCapacity / 1000000000
-    local capacityText = string.format("Total Power Capacity: %d Billion EU", capacityInBillions)
+    local capacityText = string.format("Total Power Capacity: %d Billion EU", totalCapacity / 1000000000)
     centerText(capacityText, capacityY)
 
     monitor.setTextColor(colors.white)
@@ -490,19 +495,19 @@ local function main()
                             pesuDataFromSenders[senderID] = message
                             processPESUData()  -- Update data processing
                             displayNeedsRefresh = true
-                            -- Suppress console message
-                            -- print("Processed PESU data from sender ID:", senderID)
+                            -- Console message
+                            print("Processed PESU data from sender ID:", senderID)
                         elseif message.command == "panel_data" then
                             -- Store the panel data from the sender
                             panelDataList[senderID] = message.panelDataList[1]
                             displayNeedsRefresh = true
-                            -- Suppress console message
-                            -- print("Processed panel data from sender ID:", senderID)
+                            -- Console message
+                            print("Processed panel data from sender ID:", senderID)
                         elseif message.command == "reactor_status" then
                             reactorsStatus = message.status  -- "on" or "off"
                             displayNeedsRefresh = true
-                            -- Suppress console message
-                            -- print("Updated reactor status to:", reactorsStatus)
+                            -- Console message
+                            print("Updated reactor status to:", reactorsStatus)
                         else
                             print("Unknown command from sender ID:", senderID)
                         end
@@ -514,7 +519,6 @@ local function main()
                 end
             end
         end
-        -- Removed sendReactorStatus function
     )
 end
 
