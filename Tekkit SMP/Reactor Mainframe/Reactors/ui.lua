@@ -11,11 +11,12 @@ local colors = {
     blue = colors.blue,
     yellow = colors.yellow,
     orange = colors.orange,
-    brown = colors.brown
+    brown = colors.brown,
+    custom = colors.brown  -- Using 'colors.brown' for custom color
 }
 
 -- Set custom background color
-local bgColor = colors.brown  -- Using 'colors.brown' as the slot for custom color
+local bgColor = colors.custom
 local monitor = peripheral.wrap("right")  -- Adjust monitor side as needed
 monitor.setPaletteColor(bgColor, 18 / 255, 53 / 255, 36 / 255)  -- RGB values for #123524
 
@@ -37,6 +38,11 @@ function ui.detectButtonPress(x, y)
     return nil
 end
 
+-- Function to clear buttons
+function ui.clearButtons()
+    buttonList = {}
+end
+
 -- Function to bind reactor buttons
 function ui.bindReactorButtons(reactorTable, repo)
     for name, reactor in pairs(reactorTable) do
@@ -52,6 +58,9 @@ function ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, react
     monitor.setBackgroundColor(bgColor)
     monitor.clear()
     monitor.setTextScale(0.5)
+
+    -- Clear previous buttons
+    ui.clearButtons()
 
     -- Draw the header
     monitor.setCursorPos(1, 1)
@@ -122,7 +131,6 @@ function ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, react
     -- Draw Reactor Pages button
     monitor.setBackgroundColor(colors.blue)
     monitor.setTextColor(colors.white)
-    monitor.setCursorPos(pageButtonX, pageButtonY)
     for i = 0, pageButtonHeight - 1 do
         monitor.setCursorPos(pageButtonX, pageButtonY + i)
         monitor.write(string.rep(" ", pageButtonWidth))
@@ -137,8 +145,18 @@ function ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, react
     -- Add the button to the button list
     ui.addButton("reactor1", pageButtonX, pageButtonY, pageButtonWidth, pageButtonHeight)
 
-    -- Rest of your display code (e.g., reactor logs, additional info)
-    -- For example, you might display reactor logs or statuses here
+    -- Display reactor logs or statuses
+    monitor.setCursorPos(1, 6)
+    monitor.write("Reactor Output Logs:")
+    local y = 7
+    for id, log in pairs(reactorOutputLog) do
+        if y > h - buttonHeight - 1 then
+            break
+        end
+        monitor.setCursorPos(1, y)
+        monitor.write(log.reactorName .. ": " .. log.maxOutput .. " EU/t")
+        y = y + 1
+    end
 end
 
 -- Function to display reactor data pages
@@ -147,11 +165,17 @@ function ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
     monitor.clear()
     monitor.setTextScale(0.5)
 
+    -- Clear previous buttons
+    ui.clearButtons()
+
     -- Draw the header
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.green)
     monitor.write("Reactor Status Page " .. pageNum)
     monitor.setTextColor(colors.white)
+
+    -- Get monitor size
+    local w, h = monitor.getSize()
 
     -- Display reactors per page
     local reactorsPerPage = 8
@@ -190,7 +214,6 @@ function ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
     if pageNum > 1 then
         monitor.setBackgroundColor(colors.blue)
         monitor.setTextColor(colors.white)
-        monitor.setCursorPos(prevButtonX, buttonY)
         for i = 0, buttonHeight - 1 do
             monitor.setCursorPos(prevButtonX, buttonY + i)
             monitor.write(string.rep(" ", buttonWidth))
@@ -209,7 +232,6 @@ function ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
     if pageNum < numReactorPages then
         monitor.setBackgroundColor(colors.blue)
         monitor.setTextColor(colors.white)
-        monitor.setCursorPos(nextButtonX, buttonY)
         for i = 0, buttonHeight - 1 do
             monitor.setCursorPos(nextButtonX, buttonY + i)
             monitor.write(string.rep(" ", buttonWidth))
@@ -223,6 +245,27 @@ function ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
 
         ui.addButton("next_page", nextButtonX, buttonY, buttonWidth, buttonHeight)
     end
+
+    -- Home Button
+    local homeButtonWidth = 8
+    local homeButtonHeight = 3
+    local homeButtonX = (w - homeButtonWidth) // 2
+    local homeButtonY = h - homeButtonHeight + 1
+
+    monitor.setBackgroundColor(colors.blue)
+    monitor.setTextColor(colors.white)
+    for i = 0, homeButtonHeight - 1 do
+        monitor.setCursorPos(homeButtonX, homeButtonY + i)
+        monitor.write(string.rep(" ", homeButtonWidth))
+    end
+    local homeButtonText = "Home"
+    local homeLabelX = homeButtonX + math.floor((homeButtonWidth - #homeButtonText) / 2)
+    local homeLabelY = homeButtonY + math.floor(homeButtonHeight / 2)
+    monitor.setCursorPos(homeLabelX, homeLabelY)
+    monitor.write(homeButtonText)
+    monitor.setBackgroundColor(bgColor)
+
+    ui.addButton("home", homeButtonX, homeButtonY, homeButtonWidth, homeButtonHeight)
 end
 
 -- Return the ui module

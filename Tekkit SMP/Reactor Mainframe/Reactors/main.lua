@@ -365,6 +365,8 @@ local function main()
                         if pageNum < numReactorPages then
                             switchPage("reactor" .. (pageNum + 1))
                         end
+                    elseif action == "home" then
+                        switchPage("home")
                     else
                         -- Handle other actions if necessary
                     end
