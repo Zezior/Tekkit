@@ -155,7 +155,7 @@ end
 local function centerButtons(page, numReactorPages)
     local buttonWidth = 10
     local buttonHeight = 3
-    local totalButtons = 1 + numReactorPages  -- Home + reactor pages
+    local totalButtons = 2 + numReactorPages  -- Home + All On/Off + reactor pages
     local totalWidth = totalButtons * (buttonWidth + 2)
     local startX = math.floor((w - totalWidth) / 2) + 1
 
@@ -164,6 +164,25 @@ local function centerButtons(page, numReactorPages)
     local homeButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, "Home", page == "home" and colors.green or colors.blue, "home")
     homeButton:draw()
     table.insert(buttonList, homeButton)
+    x = x + buttonWidth + 2
+
+    -- Add master on/off button next to Home button
+    local anyReactorOff = false
+    for _, reactor in pairs(reactorIDs) do
+        local id = reactor.id
+        local state = repo.get(id .. "_state")
+        local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+        if not state and not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+            anyReactorOff = true
+            break
+        end
+    end
+    local masterButtonText = anyReactorOff and "All On" or "All Off"
+    local masterButtonColor = anyReactorOff and colors.green or colors.red
+
+    local masterButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, masterButtonText, masterButtonColor, "toggle_all")
+    masterButton:draw()
+    table.insert(buttonList, masterButton)
     x = x + buttonWidth + 2
 
     -- Define Reactor page buttons
@@ -223,12 +242,12 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
     monitor.setTextColor(style.style.textColor)
 
     -- Display reactors per page
-    local reactorsPerPage = 15  -- 6 reactors per column, 3 columns
+    local reactorsPerPage = 10  -- 5 reactors per column, 2 columns
     local startIdx = (pageNum - 1) * reactorsPerPage + 1
     local endIdx = math.min(startIdx + reactorsPerPage -1, #reactorIDs)
 
-    local reactorsPerColumn = 6
-    local columns = 3
+    local reactorsPerColumn = 5
+    local columns = 2
     local columnWidth = math.floor(w / columns)
 
     for idx = startIdx, endIdx do
@@ -281,22 +300,34 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.setTextColor(colors.green)
     monitor.write(header)
 
-    -- Determine initial state for the master button
-    local anyReactorOff = false
-    for _, reactor in pairs(reactorIDs) do
-        local id = reactor.id
-        local state = repo.get(id .. "_state")
-        local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
-        if not state and not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
-            anyReactorOff = true
-            break
+    -- Display overheating, maintenance, and destroyed reactors lists
+    displayReactorLists()
+
+    -- Compute total operational reactors and active reactors
+    local totalOperationalReactors = 0
+    local activeReactors = 0
+
+    for _, reactor in pairs(reactors) do
+        if not reactor.isMaintenance and not reactor.destroyed then
+            totalOperationalReactors = totalOperationalReactors + 1
+            if reactor.active then
+                activeReactors = activeReactors + 1
+            end
         end
     end
-    local masterButtonText = anyReactorOff and "All On" or "All Off"
-    local masterButtonColor = anyReactorOff and colors.green or colors.red
 
+    -- Calculate the fill percentage for the progress bar
+    local fillPercentage = 0
+    if totalOperationalReactors > 0 then
+        fillPercentage = (activeReactors / totalOperationalReactors) * 100
+    end
+
+    -- Compute total reactor output
+    local totalReactorOutput, currentReactorOutput = computeOutputs()
+
+    -- Format outputs (e.g., display in k EU/t)
     -- Positions
-    local progressBarY = h - 12  -- Adjusted to make room for the button
+    local progressBarY = h - 7
     local currentOutputY = progressBarY - 2
     local totalOutputY = currentOutputY - 1
 
@@ -319,9 +350,6 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.write(statusText)
     monitor.setTextColor(style.style.textColor)
 
-    -- Compute total and current reactor outputs
-    local totalReactorOutput, currentReactorOutput = computeOutputs()
-
     -- Display "Total Reactor Output:"
     monitor.setCursorPos(1, totalOutputY)
     monitor.clearLine()
@@ -337,25 +365,6 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     local xCurrentOutput = math.floor((w - #currentOutputText) / 2) + 1
     monitor.setCursorPos(xCurrentOutput, currentOutputY)
     monitor.write(currentOutputText)
-
-    -- Compute total operational reactors and active reactors
-    local totalOperationalReactors = 0
-    local activeReactors = 0
-
-    for _, reactor in pairs(reactors) do
-        if not reactor.isMaintenance and not reactor.destroyed then
-            totalOperationalReactors = totalOperationalReactors + 1
-            if reactor.active then
-                activeReactors = activeReactors + 1
-            end
-        end
-    end
-
-    -- Calculate the fill percentage for the progress bar
-    local fillPercentage = 0
-    if totalOperationalReactors > 0 then
-        fillPercentage = (activeReactors / totalOperationalReactors) * 100
-    end
 
     -- Draw progress bar
     local progressBarWidth = w - 4  -- Leave some padding on sides
@@ -407,15 +416,6 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     -- Reset colors
     monitor.setBackgroundColor(style.style.backgroundColor)
     monitor.setTextColor(style.style.textColor)
-
-    -- Add master on/off button below the progress bar
-    local masterButtonY = progressBarY + 4  -- Position below the progress bar
-    local masterButton = Button:new(nil, 2, masterButtonY, 8, 3, masterButtonText, masterButtonColor, "toggle_all")
-    masterButton:draw()
-    table.insert(buttonList, masterButton)
-
-    -- Display overheating, maintenance, and destroyed reactors lists
-    displayReactorLists()
 
     -- Call the centerButtons function to display buttons at the bottom
     centerButtons("home", pages.numReactorPages)
