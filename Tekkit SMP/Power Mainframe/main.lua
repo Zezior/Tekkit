@@ -11,13 +11,7 @@ print("Mainframe Computer ID:", os.getComputerID())
 
 -- Load allowed sender IDs from ids.lua
 local ids = require("ids")
-local reactorMainframeID = ids.reactorMainframeID
-
--- Define allowed sender IDs
-local allowedSenderIDs = {
-    reactorMainframeID,
-    -- Add other sender IDs as needed
-}
+local allowedSenderIDs = ids.allowedSenderIDs  -- Correctly load allowedSenderIDs
 
 -- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
