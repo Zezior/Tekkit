@@ -1,7 +1,5 @@
 -- ids.lua
 
 return {
-    allowedSenderIDs = {
-        4709    -- Reactor Mainframe
-    }
+    reactorMainframeID = 4709  -- Replace 4709 with the actual ID of your reactor mainframe
 }
