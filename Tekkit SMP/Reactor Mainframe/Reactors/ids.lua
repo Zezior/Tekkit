@@ -1,4 +1,4 @@
--- ids.lua
+-- Reactor ids.lua
 return {
     reactorIDs = {
         4708,
