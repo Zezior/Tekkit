@@ -3,7 +3,8 @@
 local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Player%20Activity%20Status/"
 
 local filesToUpdate = {
-    "main.lua"
+    "main.lua",
+    "ids.lua"
 }
 
 local function printUsage()
