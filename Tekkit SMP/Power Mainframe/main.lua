@@ -199,6 +199,17 @@ local function detectClick(event, side, x, y)
     return nil
 end
 
+-- Function to calculate time to full charge
+local function calculateTimeToFullCharge()
+    if reactorsAreOn and totalEUOutput > 0 then
+        local euPerSecond = totalEUOutput * 20  -- Convert EU/t to EU per second (20 ticks per second)
+        local euNeeded = totalCapacity - totalStored
+        timeToFullCharge = euNeeded / euPerSecond
+    else
+        timeToFullCharge = 0
+    end
+end
+
 -- Function to process PESU data from sender computers
 local function processPESUData()
     totalStored = 0
@@ -242,17 +253,6 @@ local function processPESUData()
     -- Recalculate time to full charge
     calculateTimeToFullCharge()
     displayNeedsRefresh = true
-end
-
--- Function to calculate time to full charge
-local function calculateTimeToFullCharge()
-    if reactorsAreOn and totalEUOutput > 0 then
-        local euPerSecond = totalEUOutput * 20  -- Convert EU/t to EU per second (20 ticks per second)
-        local euNeeded = totalCapacity - totalStored
-        timeToFullCharge = euNeeded / euPerSecond
-    else
-        timeToFullCharge = 0
-    end
 end
 
 -- Function to display the PESU Page
