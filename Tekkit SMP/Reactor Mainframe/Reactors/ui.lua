@@ -75,6 +75,7 @@ function Button:handlePress()
         -- Toggle the reactor state
         local newState = not currentState
         repo.set(id .. "_state", newState)  -- Update the state locally
+        reactors[id].active = newState      -- Update the reactors table
 
         -- Send the turn_on/turn_off command via Rednet to the correct reactor ID
         rednet.send(self.reactorID, {command = newState and "turn_on" or "turn_off"})
@@ -103,6 +104,7 @@ function Button:handlePress()
                 local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     repo.set(id .. "_state", anyReactorOff)
+                    reactors[id].active = anyReactorOff  -- Update the reactors table
                     if anyReactorOff then
                         rednet.send(id, {command = "turn_on"})
                     else
@@ -128,6 +130,7 @@ function Button:handlePress()
                     local state = repo.get(id .. "_state")
                     if state then
                         repo.set(id .. "_state", false)
+                        reactors[id].active = false  -- Update the reactors table
                         rednet.send(id, {command = "turn_off"})
                         reactorsChanged = true
                     end
@@ -141,6 +144,7 @@ function Button:handlePress()
                     if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                         if not state then
                             repo.set(id .. "_state", true)
+                            reactors[id].active = true  -- Update the reactors table
                             rednet.send(id, {command = "turn_on"})
                             reactorsChanged = true
                         end
@@ -186,6 +190,7 @@ function detectButtonPress(x, y)
     end
     return nil
 end
+
 
 -- Function to create the navigation buttons at the bottom
 local function centerButtons(page, numReactorPages)
