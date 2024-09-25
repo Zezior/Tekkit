@@ -157,6 +157,7 @@ end
 
 -- Function to handle messages from the activity check computer
 local function handleActivityCheckMessage(message)
+    print("Received message from activity check computer:", textutils.serialize(message))
     if message.command == "player_online" then
         print("Received player_online command from activity check computer.")
         anyPlayerOnline = true
