@@ -87,32 +87,68 @@ function Button:handlePress()
     else
         -- Navigation or other action button
         if self.action == "toggle_all" then
-            -- Toggle all reactors that are not in maintenance mode, overheating, or destroyed
+            manualOverride = true  -- Activate manual override
             local anyReactorOff = false
-            for _, reactor in pairs(reactorIDs) do
-                local id = reactor.id
-                local state = repo.get(id .. "_state")
-                local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
-                if not state and not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
-                    anyReactorOff = true
-                    break
+            for _, reactorData in pairs(reactors) do
+                if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+                    if not reactorData.active then
+                        anyReactorOff = true
+                        break
+                    end
                 end
             end
-
-            local newState = anyReactorOff  -- If any reactor is off, we turn all on; else, we turn all off
+            local reactorsChanged = false
             for _, reactor in pairs(reactorIDs) do
                 local id = reactor.id
                 local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
-                    repo.set(id .. "_state", newState)
-                    -- Send command to reactor
-                    rednet.send(id, {command = newState and "turn_on" or "turn_off"})
+                    repo.set(id .. "_state", anyReactorOff)
+                    if anyReactorOff then
+                        rednet.send(id, {command = "turn_on"})
+                    else
+                        rednet.send(id, {command = "turn_off"})
+                    end
+                    reactorsChanged = true
                 end
             end
-            -- Update the master button's appearance
-            self.text = newState and "All Off" or "All On"
-            self.color = newState and colors.red or colors.green
+            -- Update the button's appearance
+            self.text = anyReactorOff and "All Off" or "All On"
+            self.color = anyReactorOff and colors.red or colors.green
             self:draw()
+            -- Update display
+            displayHomePage(repo, reactorIDs, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+        elseif self.action == "reset" then
+            manualOverride = false  -- Deactivate manual override
+            -- Restore reactors to automated control
+            local reactorsChanged = false
+            if not reactorsOnDueToPESU or not anyPlayerOnline then
+                -- Turn off reactors
+                for _, reactor in pairs(reactorIDs) do
+                    local id = reactor.id
+                    local state = repo.get(id .. "_state")
+                    if state then
+                        repo.set(id .. "_state", false)
+                        rednet.send(id, {command = "turn_off"})
+                        reactorsChanged = true
+                    end
+                end
+            else
+                -- Turn on reactors
+                for _, reactor in pairs(reactorIDs) do
+                    local id = reactor.id
+                    local state = repo.get(id .. "_state")
+                    local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+                    if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+                        if not state then
+                            repo.set(id .. "_state", true)
+                            rednet.send(id, {command = "turn_on"})
+                            reactorsChanged = true
+                        end
+                    end
+                end
+            end
+            -- Update display
+            displayHomePage(repo, reactorIDs, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
         else
             -- Navigation button action
             return self.action
@@ -156,10 +192,6 @@ local function centerButtons(page, numReactorPages)
     local buttonWidth = 10
     local buttonHeight = 3
     local totalButtons = 1 + numReactorPages  -- Home + reactor pages
-    if page == "home" then
-        totalButtons = totalButtons + 1  -- Add one more for master button on home page
-    end
-    local totalWidth = totalButtons * (buttonWidth + 2)
     local x = 2  -- Start from the left edge with some padding
 
     -- Define the Home button
@@ -167,27 +199,6 @@ local function centerButtons(page, numReactorPages)
     homeButton:draw()
     table.insert(buttonList, homeButton)
     x = x + buttonWidth + 2
-
-    if page == "home" then
-        -- Add master on/off button next to Home button
-        local anyReactorOff = false
-        for _, reactor in pairs(reactorIDs) do
-            local id = reactor.id
-            local state = repo.get(id .. "_state")
-            local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
-            if not state and not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
-                anyReactorOff = true
-                break
-            end
-        end
-        local masterButtonText = anyReactorOff and "All On" or "All Off"
-        local masterButtonColor = anyReactorOff and colors.green or colors.red
-
-        local masterButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, masterButtonText, masterButtonColor, "toggle_all")
-        masterButton:draw()
-        table.insert(buttonList, masterButton)
-        x = x + buttonWidth + 2
-    end
 
     -- Define Reactor page buttons
     for i = 1, numReactorPages do
@@ -288,13 +299,15 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
 end
 
 -- Function to display the home page
-function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESU)
+function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESUPassed, manualOverridePassed)
     resetButtons()
     repo = repoPassed
     reactorIDs = reactorTablePassed
     reactors = reactorsPassed
     pages.numReactorPages = numReactorPagesPassed
     reactorOutputLog = reactorOutputLogPassed
+    reactorsOnDueToPESU = reactorsOnDueToPESUPassed
+    manualOverride = manualOverridePassed
     style.applyStyle()
     monitor.clear()
     -- Center and color the header
@@ -329,9 +342,8 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     -- Compute total reactor output
     local totalReactorOutput, currentReactorOutput = computeOutputs()
 
-    -- Format outputs (e.g., display in k EU/t)
     -- Positions
-    local progressBarY = h - 7  -- Lower the progress bar back down
+    local progressBarY = h - 7  -- Adjust as needed
     local currentOutputY = progressBarY - 2
     local totalOutputY = currentOutputY - 1
 
@@ -358,17 +370,52 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.setCursorPos(1, totalOutputY)
     monitor.clearLine()
     local totalOutputText = "Total Reactor Output: " .. formatEUOutput(totalReactorOutput)
-    local xTotalOutput = math.floor((w - #totalOutputText) / 2) + 1
-    monitor.setCursorPos(xTotalOutput, totalOutputY)
+    monitor.setCursorPos(1, totalOutputY)
     monitor.write(totalOutputText)
 
     -- Display "Current Reactor Output:"
     monitor.setCursorPos(1, currentOutputY)
     monitor.clearLine()
     local currentOutputText = "Current Reactor Output: " .. formatEUOutput(currentReactorOutput)
-    local xCurrentOutput = math.floor((w - #currentOutputText) / 2) + 1
-    monitor.setCursorPos(xCurrentOutput, currentOutputY)
+    monitor.setCursorPos(1, currentOutputY)
     monitor.write(currentOutputText)
+
+    -- Add "All On/Off" and "Reset" buttons on the far left
+    local buttonY = totalOutputY
+    local buttonWidth = 8
+    local buttonHeight = 2
+    local buttonX = w - buttonWidth - 2  -- Place on the far right
+
+    -- Determine button text and color
+    local anyReactorOff = false
+    for _, reactorData in pairs(reactors) do
+        if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+            if not reactorData.active then
+                anyReactorOff = true
+                break
+            end
+        end
+    end
+    local masterButtonText = anyReactorOff and "All On" or "All Off"
+    local masterButtonColor = anyReactorOff and colors.green or colors.red
+
+    -- Create "All On/Off" button
+    local masterButton = Button:new(nil, 2, buttonY, buttonWidth, buttonHeight, masterButtonText, masterButtonColor, "toggle_all")
+    masterButton:draw()
+    table.insert(buttonList, masterButton)
+
+    -- Create "Reset" button next to it
+    local resetButton = Button:new(nil, 2, buttonY + buttonHeight + 1, buttonWidth, buttonHeight, "Reset", colors.orange, "reset")
+    resetButton:draw()
+    table.insert(buttonList, resetButton)
+
+    -- Indicate if manual override is active
+    if manualOverride then
+        monitor.setCursorPos(2, buttonY - 1)
+        monitor.setTextColor(colors.orange)
+        monitor.write("Manual Override Active")
+        monitor.setTextColor(style.style.textColor)
+    end
 
     -- Draw progress bar
     local progressBarWidth = w - 4  -- Leave some padding on sides

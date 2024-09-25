@@ -156,13 +156,14 @@ end
 
 local reactorsOnDueToPESU = false  -- Track if reactors are turned on due to PESU levels
 local anyPlayerOnline = false  -- Track player online status
+local manualOverride = false  -- Track if manual override is active
 
 -- Function to switch between pages dynamically
 local function switchPage(page)
     if pages[page] then
         currentPage = page
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
         elseif string.sub(currentPage, 1, 7) == "reactor" then
             -- Extract page number
             local pageNumString = string.sub(currentPage, 8)
@@ -193,7 +194,7 @@ local function handleActivityCheckMessage(message)
         anyPlayerOnline = true
 
         -- Only turn on reactors if both conditions are met
-        if reactorsOnDueToPESU then
+        if reactorsOnDueToPESU and not manualOverride then
             local reactorsTurnedOn = false
             for _, reactor in pairs(reactorTable) do
                 local id = reactor.id
@@ -211,33 +212,37 @@ local function handleActivityCheckMessage(message)
                 sendReactorStatus("on")
             end
         else
-            print("Reactors are not turned on due to PESU levels.")
+            print("Reactors are not turned on due to PESU levels or manual override.")
         end
 
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
         end
     elseif message.command == "player_offline" then
         print("Received player_offline command from activity check computer.")
         anyPlayerOnline = false
-        -- Turn off all reactors
-        local reactorsTurnedOff = false
-        for _, reactor in pairs(reactorTable) do
-            local id = reactor.id
-            local state = repo.get(id .. "_state")
-            if state then
-                repo.set(id .. "_state", false)
-                rednet.send(id, {command = "turn_off"})
-                reactorsTurnedOff = true
+        -- Turn off all reactors if not in manual override
+        if not manualOverride then
+            local reactorsTurnedOff = false
+            for _, reactor in pairs(reactorTable) do
+                local id = reactor.id
+                local state = repo.get(id .. "_state")
+                if state then
+                    repo.set(id .. "_state", false)
+                    rednet.send(id, {command = "turn_off"})
+                    reactorsTurnedOff = true
+                end
             end
-        end
-        if reactorsTurnedOff then
-            sendReactorStatus("off")
+            if reactorsTurnedOff then
+                sendReactorStatus("off")
+            end
+        else
+            print("Manual override active. Reactors remain unchanged.")
         end
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
         end
     elseif message.command == "check_players" then
         -- Send player online status to the requester
@@ -247,7 +252,7 @@ local function handleActivityCheckMessage(message)
         anyPlayerOnline = message.playersOnline
         print("Received player status from activity check computer. Players online:", anyPlayerOnline)
         -- After updating player status, check if we need to turn on reactors
-        if anyPlayerOnline and reactorsOnDueToPESU then
+        if anyPlayerOnline and reactorsOnDueToPESU and not manualOverride then
             local reactorsTurnedOn = false
             -- Turn on reactors
             for _, reactor in pairs(reactorTable) do
@@ -267,10 +272,10 @@ local function handleActivityCheckMessage(message)
             end
             -- Update the display
             if currentPage == "home" then
-                ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+                ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
             end
         else
-            print("Reactors are not turned on due to PESU levels or no players online.")
+            print("Reactors are not turned on due to PESU levels, no players online, or manual override.")
         end
     else
         print("Unknown command from activity check computer:", message.command)
@@ -279,6 +284,10 @@ end
 
 -- Function to handle messages from the power mainframe
 local function handlePowerMainframeMessage(message)
+    if manualOverride then
+        print("Manual override active. Ignoring power mainframe commands.")
+        return
+    end
     if message.command == "turn_on_reactors" then
         print("Received turn_on_reactors command from power mainframe.")
         reactorsOnDueToPESU = true
@@ -328,7 +337,7 @@ local function handlePowerMainframeMessage(message)
 
     -- Update the display
     if currentPage == "home" then
-        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
     end
 end
 
@@ -363,7 +372,7 @@ local function main()
     end
 
     -- Display the home page initially
-    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
 
     -- Bind reactor buttons using repo
     ui.bindReactorButtons(reactorTable, repo)
@@ -380,7 +389,7 @@ local function main()
                 local action = ui.detectButtonPress(x, y)
                 if action then
                     if action == "toggle_all" then
-                        -- Toggle all reactors regardless of PESU requirement
+                        manualOverride = true
                         local anyReactorOff = false
                         for _, reactorData in pairs(reactors) do
                             if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
@@ -405,13 +414,46 @@ local function main()
                                 reactorsChanged = true
                             end
                         end
-                        -- Reset reactorsOnDueToPESU to false
-                        reactorsOnDueToPESU = false
-                        if reactorsChanged then
-                            sendReactorStatus(anyReactorOff and "on" or "off")
+                        -- Update display
+                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+                    elseif action == "reset" then
+                        manualOverride = false
+                        -- Restore reactors to automated control
+                        local reactorsChanged = false
+                        if not reactorsOnDueToPESU or not anyPlayerOnline then
+                            -- Turn off reactors
+                            for _, reactor in pairs(reactorTable) do
+                                local id = reactor.id
+                                local state = repo.get(id .. "_state")
+                                if state then
+                                    repo.set(id .. "_state", false)
+                                    rednet.send(id, {command = "turn_off"})
+                                    reactorsChanged = true
+                                end
+                            end
+                            if reactorsChanged then
+                                sendReactorStatus("off")
+                            end
+                        else
+                            -- Turn on reactors
+                            for _, reactor in pairs(reactorTable) do
+                                local id = reactor.id
+                                local state = repo.get(id .. "_state")
+                                local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+                                if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
+                                    if not state then
+                                        repo.set(id .. "_state", true)
+                                        rednet.send(id, {command = "turn_on"})
+                                        reactorsChanged = true
+                                    end
+                                end
+                            end
+                            if reactorsChanged then
+                                sendReactorStatus("on")
+                            end
                         end
                         -- Update display
-                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
                     else
                         switchPage(action)  -- Switch pages based on the action
                     end
@@ -501,7 +543,7 @@ local function main()
 
                         -- Update home page if necessary
                         if currentPage == "home" then
-                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
                         end
                     else
                         print("Invalid message received from reactor ID:", senderID)
