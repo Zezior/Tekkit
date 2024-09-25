@@ -1,4 +1,4 @@
--- main.lua
+-- Reactor Mainframe - main.lua
 
 local ui = require("ui")
 local ids = require("ids")
@@ -6,8 +6,10 @@ local ids = require("ids")
 local reactorIDs = ids.reactorIDs
 local activityCheckID = ids.activityCheckID
 local powerMainframeID = ids.powerMainframeID
+local reactorMainframeID = ids.reactorMainframeID
 
-table.sort(reactorIDs, function(a, b) return a.id < b.id end)
+table.sort(reactorIDs)
+local minReactorID = reactorIDs[1] or 0
 
 local currentPage = "home"  -- Start on the home page
 local reactors = {}  -- Table to store reactor data
@@ -136,7 +138,7 @@ local function switchPage(page)
     if pages[page] then
         currentPage = page
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
         elseif string.sub(currentPage, 1, 7) == "reactor" then
             -- Extract page number
             local pageNumString = string.sub(currentPage, 8)

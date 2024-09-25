@@ -1,6 +1,6 @@
 -- ui.lua
 
-local monitor = peripheral.wrap("right")
+local monitor = peripheral.wrap("right")  -- Adjust as necessary
 local style = require("style")
 monitor.setTextScale(style.style.textScale)
 local repo = nil  -- This will be assigned the passed repo object from main.lua
@@ -14,7 +14,7 @@ local w, h = monitor.getSize()
 local buttonList = {}
 
 -- Function to reset the button list
-function resetButtons()
+local function resetButtons()
     buttonList = {}
 end
 
@@ -58,12 +58,18 @@ function Button:handlePress()
 
         -- Check if reactor is destroyed
         if reactorData.destroyed then
+            print("Cannot control reactor " .. id .. " because it is destroyed.")
             return
         end
 
         -- Check if reactor is overheating or in maintenance mode
         if reactorData.overheating then
+            print("Cannot turn on reactor " .. id .. " because it is overheating.")
             return
+        end
+        if reactorData.isMaintenance then
+            print("Reactor " .. id .. " is in maintenance mode.")
+            -- Allow individual control even in maintenance mode
         end
 
         -- Toggle the reactor state
@@ -72,6 +78,7 @@ function Button:handlePress()
 
         -- Send the turn_on/turn_off command via Rednet to the correct reactor ID
         rednet.send(self.reactorID, {command = newState and "turn_on" or "turn_off"})
+        print("Sent command to reactor:", self.reactorID, "New State:", newState)
 
         -- Update the button's appearance immediately based on the new state
         self.text = newState and "Off" or "On"
@@ -152,7 +159,6 @@ local function centerButtons(page, numReactorPages)
     local totalWidth = totalButtons * (buttonWidth + 2)
     local startX = math.floor((w - totalWidth) / 2) + 1
 
-    local buttons = {}
     local x = startX
     -- Define the Home button
     local homeButton = Button:new(nil, x, h - buttonHeight + 1, buttonWidth, buttonHeight, "Home", page == "home" and colors.green or colors.blue, "home")
@@ -200,66 +206,55 @@ function addReactorControlButtons(reactorID, status, x, y, data, buttonWidth)
     button:draw()
 end
 
--- Display the reactor lists on the home page
-function displayReactorLists()
-    -- Lists start from line 3
-    local yStart = 3
-    local thirdWidth = math.floor(w / 3)
+-- Function to display reactor data on reactor pages
+function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDsPassed)
+    resetButtons()
+    reactors = reactorsPassed
+    reactorIDs = reactorIDsPassed
+    pages.numReactorPages = numReactorPages
+    style.applyStyle()
+    monitor.clear()
+    -- Center and color the header
+    local header = "Reactor Status Page " .. pageNum
+    local xHeader = math.floor((w - #header) / 2) + 1
+    monitor.setCursorPos(xHeader, 1)
+    monitor.setTextColor(colors.green)
+    monitor.write(header)
+    monitor.setTextColor(style.style.textColor)
 
-    -- Calculate starting positions for the lists
-    local overheatingWidth = 20  -- Adjust the width as needed
-    local xOverheating = math.floor((thirdWidth - overheatingWidth) / 2) + 1
+    -- Display reactor data per page
+    local reactorsPerPage = 8
+    local startIdx = (pageNum - 1) * reactorsPerPage + 1
+    local endIdx = math.min(startIdx + reactorsPerPage -1, #reactorIDs)
+    local y = 3
 
-    local maintenanceWidth = 20  -- Adjust the width as needed
-    local xMaintenance = thirdWidth + math.floor((thirdWidth - maintenanceWidth) / 2) + 1
-
-    local destroyedWidth = 20  -- Adjust the width as needed
-    local xDestroyed = 2 * thirdWidth + math.floor((thirdWidth - destroyedWidth) / 2) + 1
-
-    -- Display Overheating Reactors
-    monitor.setCursorPos(xOverheating, yStart)
-    monitor.setTextColor(colors.yellow)
-    monitor.write("Overheating Reactors")
-    local y = yStart + 1
-    for id, reactor in pairs(reactors) do
-        if reactor.overheating then
-            monitor.setCursorPos(xOverheating, y)
-            monitor.setTextColor(style.style.textColor)
-            monitor.write(reactor.reactorName .. " - " .. reactor.temp .. "C")
+    for idx = startIdx, endIdx do
+        local reactorID = reactorIDs[idx]
+        local reactorData = reactors[reactorID]
+        if reactorData then
+            monitor.setCursorPos(2, y)
+            monitor.write("Reactor " .. idx .. ": " .. reactorData.reactorName)
             y = y + 1
+            monitor.setCursorPos(4, y)
+            monitor.write("Status: " .. (reactorData.active and "Active" or "Inactive"))
+            y = y + 1
+            monitor.setCursorPos(4, y)
+            monitor.write("Temp: " .. reactorData.temp)
+            y = y + 1
+            monitor.setCursorPos(4, y)
+            monitor.write("EU Output: " .. reactorData.euOutput)
+            y = y + 1
+            -- Add reactor control button
+            addReactorControlButtons(reactorID, reactorData.active, w - 10, y - 4, reactorData)
+            y = y + 1  -- Extra space between reactors
         end
     end
 
-    -- Display Reactor Maintenance
-    monitor.setCursorPos(xMaintenance, yStart)
-    monitor.setTextColor(colors.blue)
-    monitor.write("Reactor Maintenance")
-    y = yStart + 1
-    for id, reactor in pairs(reactors) do
-        if reactor.isMaintenance then
-            monitor.setCursorPos(xMaintenance, y)
-            monitor.setTextColor(style.style.textColor)
-            monitor.write(reactor.reactorName)
-            y = y + 1
-        end
-    end
-
-    -- Display Destroyed Reactors
-    monitor.setCursorPos(xDestroyed, yStart)
-    monitor.setTextColor(colors.red)
-    monitor.write("Destroyed Reactors")
-    y = yStart + 1
-    for id, reactor in pairs(reactors) do
-        if reactor.destroyed then
-            monitor.setCursorPos(xDestroyed, y)
-            monitor.setTextColor(style.style.textColor)
-            monitor.write(reactor.reactorName)
-            y = y + 1
-        end
-    end
+    -- Call the centerButtons function to display navigation buttons
+    centerButtons("reactor" .. pageNum, pages.numReactorPages)
 end
 
--- Display Home Page
+-- Function to display the home page
 function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed)
     resetButtons()
     repo = repoPassed
@@ -334,7 +329,7 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
         end
     end
 
-    -- Format outputs
+    -- Format outputs (e.g., display in k EU/t)
     local function formatEUOutput(value)
         if value >= 1000000 then
             return string.format("%.2f M EU/t", value / 1000000)
@@ -349,6 +344,22 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     local progressBarY = h - 7
     local currentOutputY = progressBarY - 2
     local totalOutputY = currentOutputY - 1
+
+    -- Display reactor status
+    local reactorsAreOn = false
+    for _, reactorData in pairs(reactors) do
+        if reactorData.active then
+            reactorsAreOn = true
+            break
+        end
+    end
+
+    local statusText = reactorsAreOn and "Reactors Are ON" or "Reactors Are OFF"
+    local statusColor = reactorsAreOn and colors.green or colors.red
+    monitor.setTextColor(statusColor)
+    monitor.setCursorPos(1, totalOutputY - 1)
+    monitor.write(statusText)
+    monitor.setTextColor(style.style.textColor)
 
     -- Display "Total Reactor Output:"
     monitor.setCursorPos(1, totalOutputY)
@@ -406,7 +417,7 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.write(string.rep(" ", filledBars))
 
     -- Write percentage over the progress bar
-    monitor.setBackgroundColor(colors.black)
+    monitor.setBackgroundColor(colors.black)  -- Set background to black for percentage text
     monitor.setTextColor(colors.white)
     local percentageText = string.format("%.2f%%", fillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
@@ -421,60 +432,63 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     centerButtons("home", pages.numReactorPages)
 end
 
--- Function to display reactor data pages
-function displayReactorData(reactorsPassed, pageNum, numReactorPagesPassed, reactorIDsPassed)
-    resetButtons()
-    reactors = reactorsPassed
-    pages.numReactorPages = numReactorPagesPassed
-    reactorIDs = reactorIDsPassed
-    style.applyStyle()
-    monitor.clear()
+-- Function to display reactor lists on the home page
+function displayReactorLists()
+    -- Lists start from line 3
+    local yStart = 3
+    local thirdWidth = math.floor(w / 3)
 
-    -- Display reactor data for the given page
-    local reactorsPerPage = 8
-    local startIdx = (pageNum - 1) * reactorsPerPage + 1
-    local endIdx = math.min(startIdx + reactorsPerPage - 1, #reactorIDs)
+    -- Calculate starting positions for the lists
+    local overheatingWidth = 20  -- Adjust the width as needed
+    local xOverheating = math.floor((thirdWidth - overheatingWidth) / 2) + 1
 
-    -- Header
-    local header = "Reactor Status Page " .. pageNum
-    local xHeader = math.floor((w - #header) / 2) + 1
-    monitor.setCursorPos(xHeader, 1)
-    monitor.setTextColor(colors.green)
-    monitor.write(header)
-    monitor.setTextColor(style.style.textColor)
+    local maintenanceWidth = 20  -- Adjust the width as needed
+    local xMaintenance = thirdWidth + math.floor((thirdWidth - maintenanceWidth) / 2) + 1
 
-    local y = 3  -- Starting y position
-    for idx = startIdx, endIdx do
-        local reactorID = reactorIDs[idx].id
-        local reactor = reactors[reactorID]
-        if reactor then
-            -- Display reactor info
-            monitor.setCursorPos(2, y)
-            monitor.write("Reactor " .. idx .. ": " .. reactor.reactorName)
+    local destroyedWidth = 20  -- Adjust the width as needed
+    local xDestroyed = 2 * thirdWidth + math.floor((thirdWidth - destroyedWidth) / 2) + 1
+
+    -- Display Overheating Reactors
+    monitor.setCursorPos(xOverheating, yStart)
+    monitor.setTextColor(colors.yellow)
+    monitor.write("Overheating Reactors")
+    local y = yStart + 1
+    for id, reactor in pairs(reactors) do
+        if reactor.overheating then
+            monitor.setCursorPos(xOverheating, y)
+            monitor.setTextColor(style.style.textColor)
+            monitor.write(reactor.reactorName .. " - " .. reactor.temp .. "C")
             y = y + 1
-            monitor.setCursorPos(4, y)
-            monitor.write("Status: " .. (reactor.active and "Active" or "Inactive"))
-            y = y + 1
-            monitor.setCursorPos(4, y)
-            monitor.write("Temp: " .. reactor.temp)
-            y = y + 1
-            monitor.setCursorPos(4, y)
-            monitor.write("EU Output: " .. reactor.euOutput)
-            y = y + 2  -- Add extra space
-
-            -- Add control button for reactor
-            local buttonX = w - 10
-            local buttonY = y - 4
-            addReactorControlButtons(reactorID, reactor.active, buttonX, buttonY, reactor)
-        else
-            monitor.setCursorPos(2, y)
-            monitor.write("Reactor " .. idx .. ": Data not available")
-            y = y + 2
         end
     end
 
-    -- Add navigation buttons
-    centerButtons("reactor" .. pageNum, pages.numReactorPages)
+    -- Display Reactor Maintenance
+    monitor.setCursorPos(xMaintenance, yStart)
+    monitor.setTextColor(colors.blue)
+    monitor.write("Reactor Maintenance")
+    y = yStart + 1
+    for id, reactor in pairs(reactors) do
+        if reactor.isMaintenance then
+            monitor.setCursorPos(xMaintenance, y)
+            monitor.setTextColor(style.style.textColor)
+            monitor.write(reactor.reactorName)
+            y = y + 1
+        end
+    end
+
+    -- Display Destroyed Reactors
+    monitor.setCursorPos(xDestroyed, yStart)
+    monitor.setTextColor(colors.red)
+    monitor.write("Destroyed Reactors")
+    y = yStart + 1
+    for id, reactor in pairs(reactors) do
+        if reactor.destroyed then
+            monitor.setCursorPos(xDestroyed, y)
+            monitor.setTextColor(style.style.textColor)
+            monitor.write(reactor.reactorName)
+            y = y + 1
+        end
+    end
 end
 
 return {
@@ -484,5 +498,6 @@ return {
     displayHomePage = displayHomePage,
     displayReactorData = displayReactorData,
     centerButtons = centerButtons,
-    resetButtons = resetButtons
+    resetButtons = resetButtons,
+    displayReactorLists = displayReactorLists
 }
