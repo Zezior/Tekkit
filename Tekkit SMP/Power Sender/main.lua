@@ -1,8 +1,8 @@
 -- pesu_sender_auto.lua
 
 -- Configuration
-local wirelessModemSide = "top"    -- Side where the wireless modem is attached
-local updateInterval = 5           -- Time in seconds between sending updates
+local wirelessModemSide = "front"    -- Side where the wireless modem is attached
+local updateInterval = 10           -- Time in seconds between sending updates
 local mainframeID = 4644           -- Mainframe's Rednet ID
 
 -- Open the wireless modem for rednet communication
