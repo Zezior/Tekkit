@@ -53,7 +53,13 @@ function Button:handlePress()
         print("Button pressed for reactorID:", self.reactorID)
         local id = self.reactorID
         local currentState = repo.get(id .. "_state")
-        local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
+        local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+
+        -- Check if reactor is destroyed
+        if reactorData.destroyed then
+            print("Cannot control reactor " .. id .. " because it is destroyed.")
+            return
+        end
 
         -- Check if reactor is overheating or in maintenance mode
         if reactorData.overheating then
@@ -80,13 +86,13 @@ function Button:handlePress()
     else
         -- Navigation or other action button
         if self.action == "toggle_all" then
-            -- Toggle all reactors that are not in maintenance mode and not overheating
+            -- Toggle all reactors that are not in maintenance mode, overheating, or destroyed
             local anyReactorOff = false
             for _, reactor in pairs(reactorIDs) do
                 local id = reactor.id
                 local state = repo.get(id .. "_state")
-                local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
-                if not state and not reactorData.isMaintenance and not reactorData.overheating then
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+                if not state and not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     anyReactorOff = true
                     break
                 end
@@ -95,8 +101,8 @@ function Button:handlePress()
             local newState = anyReactorOff  -- If any reactor is off, we turn all on; else, we turn all off
             for _, reactor in pairs(reactorIDs) do
                 local id = reactor.id
-                local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
-                if not reactorData.isMaintenance and not reactorData.overheating then
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+                if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     repo.set(id .. "_state", newState)
                     -- Send command to reactor
                     rednet.send(id, {command = newState and "turn_on" or "turn_off"})
@@ -184,8 +190,11 @@ function addReactorControlButtons(reactorID, status, x, y, data, buttonWidth)
     local buttonText = status and "Off" or "On"
     local buttonColor = status and colors.red or colors.green
 
-    -- Adjust button if reactor is overheating or in maintenance mode
-    if data.overheating then
+    -- Adjust button if reactor is destroyed
+    if data.destroyed then
+        buttonText = "X"
+        buttonColor = colors.black
+    elseif data.overheating then
         buttonText = "OH"
         buttonColor = colors.gray
     elseif data.isMaintenance then
@@ -207,14 +216,17 @@ end
 function displayReactorLists()
     -- Lists start from line 3
     local yStart = 3
-    local halfWidth = math.floor(w / 2)
+    local thirdWidth = math.floor(w / 3)
 
     -- Calculate starting positions for the lists
     local overheatingWidth = 20  -- Adjust the width as needed
-    local xOverheating = math.floor((halfWidth - overheatingWidth) / 2) + 1
+    local xOverheating = math.floor((thirdWidth - overheatingWidth) / 2) + 1
 
     local maintenanceWidth = 20  -- Adjust the width as needed
-    local xMaintenance = halfWidth + math.floor((halfWidth - maintenanceWidth) / 2) + 1
+    local xMaintenance = thirdWidth + math.floor((thirdWidth - maintenanceWidth) / 2) + 1
+
+    local destroyedWidth = 20  -- Adjust the width as needed
+    local xDestroyed = 2 * thirdWidth + math.floor((thirdWidth - destroyedWidth) / 2) + 1
 
     -- Display Overheating Reactors
     monitor.setCursorPos(xOverheating, yStart)
@@ -243,6 +255,20 @@ function displayReactorLists()
             y = y + 1
         end
     end
+
+    -- Display Destroyed Reactors
+    monitor.setCursorPos(xDestroyed, yStart)
+    monitor.setTextColor(colors.black)
+    monitor.write("Destroyed Reactors")
+    y = yStart + 1
+    for id, reactor in pairs(reactors) do
+        if reactor.destroyed then
+            monitor.setCursorPos(xDestroyed, y)
+            monitor.setTextColor(style.style.textColor)
+            monitor.write(reactor.reactorName)
+            y = y + 1
+        end
+    end
 end
 
 -- Display Home Page
@@ -266,8 +292,8 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     for _, reactor in pairs(reactorIDs) do
         local id = reactor.id
         local state = repo.get(id .. "_state")
-        local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
-        if not state and not reactorData.isMaintenance and not reactorData.overheating then
+        local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+        if not state and not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
             anyReactorOff = true
             break
         end
@@ -280,7 +306,7 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     masterButton:draw()
     table.insert(buttonList, masterButton)
 
-    -- Display overheating and maintenance reactors lists
+    -- Display overheating, maintenance, and destroyed reactors lists
     displayReactorLists()
 
     -- Call the centerButtons function to display buttons at the bottom

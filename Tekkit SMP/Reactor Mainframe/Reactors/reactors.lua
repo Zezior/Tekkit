@@ -57,7 +57,6 @@ local function displayReactorData(reactors, pageNum, numReactorPages, reactorIDs
         local reactorID = reactorIDs[idx]
         if reactorID then
             local data = reactors[reactorID]
-
             local x = xOffsets[column]
             local y = lineInColumn
 
@@ -74,7 +73,9 @@ local function displayReactorData(reactors, pageNum, numReactorPages, reactorIDs
                     euOutput = "0",
                     fuelRemaining = "N/A",
                     isMaintenance = false,
-                    overheating = false
+                    overheating = false,
+                    destroyed = false,
+                    status = "unknown"
                 }
                 -- Add buttons with default values
                 ui.addReactorControlButtons(reactorID, data.active, x, y, data, buttonWidth)
@@ -92,7 +93,7 @@ local function displayReactorData(reactors, pageNum, numReactorPages, reactorIDs
             -- Check if temperature is over a threshold, set text color to red
             local tempString = tostring(data.temp):gsub("[^%d%.]", "")
             local tempValue = tonumber(tempString)
-            if tempValue and tempValue > 1 then
+            if tempValue and tempValue > 4500 then
                 monitor.setTextColor(colors.red)
             else
                 monitor.setTextColor(style.style.textColor)
@@ -104,7 +105,10 @@ local function displayReactorData(reactors, pageNum, numReactorPages, reactorIDs
             -- Display reactor status
             monitor.setCursorPos(x, y)
             monitor.write("Status: ")
-            if data.active then
+            if data.destroyed then
+                monitor.setTextColor(colors.black)
+                monitor.write("Destroyed")
+            elseif data.active then
                 monitor.setTextColor(colors.green)
                 monitor.write("On")
             else

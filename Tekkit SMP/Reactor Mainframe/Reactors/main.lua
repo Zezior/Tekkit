@@ -64,7 +64,9 @@ for _, reactor in pairs(reactorTable) do
         euOutput = "0",
         fuelRemaining = "N/A",
         isMaintenance = false,
-        overheating = false
+        overheating = false,
+        destroyed = false,  -- Add destroyed flag
+        status = "unknown"  -- Add status field
     }
 end
 
@@ -130,13 +132,13 @@ local function handleActivityCheckMessage(message)
     if message.command == "player_online" then
         print("Received player_online command from activity check computer.")
         anyPlayerOnline = true
-        -- Turn on reactors that are not in maintenance mode or overheating
+        -- Turn on reactors that are not in maintenance mode or overheating or destroyed
         if reactorsOnDueToPESU then
             for _, reactor in pairs(reactorTable) do
                 local id = reactor.id
                 local state = repo.get(id .. "_state")
-                local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
-                if not reactorData.isMaintenance and not reactorData.overheating then
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+                if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     if not state then
                         repo.set(id .. "_state", true)
                         rednet.send(id, {command = "turn_on"})
@@ -177,13 +179,13 @@ local function handlePowerMainframeMessage(message)
     if message.command == "turn_on_reactors" then
         print("Received turn_on_reactors command from power mainframe.")
         reactorsOnDueToPESU = true
-        -- Turn on reactors that are not in maintenance mode or overheating, and if players are online
+        -- Turn on reactors that are not in maintenance mode or overheating or destroyed, and if players are online
         if anyPlayerOnline then
             for _, reactor in pairs(reactorTable) do
                 local id = reactor.id
                 local state = repo.get(id .. "_state")
-                local reactorData = reactors[id] or { isMaintenance = false, overheating = false }
-                if not reactorData.isMaintenance and not reactorData.overheating then
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
+                if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     if not state then
                         repo.set(id .. "_state", true)
                         rednet.send(id, {command = "turn_on"})
@@ -257,8 +259,19 @@ local function main()
                         print("Reactor data received for ID:", message.id)
                         print("Message content:", textutils.serialize(message))
 
-                        -- Update reactor state in repo
-                        repo.set(message.id .. "_state", message.active)
+                        -- Handle reactor status
+                        if message.status == "Destroyed" then
+                            reactors[message.id].destroyed = true
+                            reactors[message.id].status = "Destroyed"
+                            reactors[message.id].active = false
+                            -- Update reactor state in repo
+                            repo.set(message.id .. "_state", false)
+                        else
+                            reactors[message.id].destroyed = false
+                            reactors[message.id].status = message.status or "online"
+                            -- Update reactor state in repo
+                            repo.set(message.id .. "_state", message.active)
+                        end
 
                         -- Check for maintenance mode
                         if string.find(message.reactorName, "-M") then
@@ -267,19 +280,21 @@ local function main()
                             reactors[message.id].isMaintenance = false
                         end
 
-                        -- Check for overheating
-                        local tempString = (message.temp or ""):gsub("[^%d%.]", "")
-                        local temp = tonumber(tempString)
-                        if temp and temp > 4500 then
-                            reactors[message.id].overheating = true
-                            -- Send command to turn off reactor
-                            rednet.send(message.id, {command = "turn_off"})
-                            -- Update state in repo
-                            repo.set(message.id .. "_state", false)
-                            print("Reactor " .. message.id .. " is overheating! Shutting down.")
-                        elseif temp and temp < 3000 then
-                            -- Clear overheating flag if temp is below threshold
-                            reactors[message.id].overheating = false
+                        -- Check for overheating only if reactor is not destroyed
+                        if not reactors[message.id].destroyed then
+                            local tempString = (message.temp or ""):gsub("[^%d%.]", "")
+                            local temp = tonumber(tempString)
+                            if temp and temp > 4500 then
+                                reactors[message.id].overheating = true
+                                -- Send command to turn off reactor
+                                rednet.send(message.id, {command = "turn_off"})
+                                -- Update state in repo
+                                repo.set(message.id .. "_state", false)
+                                print("Reactor " .. message.id .. " is overheating! Shutting down.")
+                            elseif temp and temp < 3000 then
+                                -- Clear overheating flag if temp is below threshold
+                                reactors[message.id].overheating = false
+                            end
                         end
 
                         -- Update display if on reactor page
