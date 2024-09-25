@@ -51,8 +51,8 @@ rednet.open("top")  -- Adjust the side as needed for the modem
 
 -- Dynamically generate the reactorTable based on reactorIDs
 local reactorTable = {}
-for index, reactorData in ipairs(reactorIDs) do
-    reactorTable["Reactor" .. index] = {id = reactorData.id, name = "Reactor " .. index}
+for index, reactorID in ipairs(reactorIDs) do
+    reactorTable["Reactor" .. index] = {id = reactorID, name = "Reactor " .. index}
 end
 
 -- Initialize reactor states in the repo and reactors table
@@ -122,8 +122,8 @@ end
 
 -- Check if senderID is in the reactor IDs list
 local function isReactorID(senderID)
-    for _, reactorData in ipairs(reactorIDs) do
-        if reactorData.id == senderID then
+    for _, reactorID in ipairs(reactorIDs) do
+        if reactorID == senderID then
             return true
         end
     end
@@ -187,7 +187,7 @@ local function handleActivityCheckMessage(message)
 
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
         end
     elseif message.command == "player_offline" then
         print("Received player_offline command from activity check computer.")
@@ -204,7 +204,7 @@ local function handleActivityCheckMessage(message)
         sendReactorStatus("off")
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
         end
     elseif message.command == "check_players" then
         -- Send player online status to the requester
@@ -255,7 +255,7 @@ local function handlePowerMainframeMessage(message)
 
     -- Update the display
     if currentPage == "home" then
-        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
     end
 end
 
@@ -265,7 +265,7 @@ local function main()
     loadReactorOutputLog()
 
     -- Display the home page initially
-    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
 
     -- Bind reactor buttons using repo
     ui.bindReactorButtons(reactorTable, repo)
@@ -309,7 +309,7 @@ local function main()
                         reactorsOnDueToPESU = false
                         sendReactorStatus(anyReactorOff and "on" or "off")
                         -- Update display
-                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
                     else
                         switchPage(action)  -- Switch pages based on the action
                     end
@@ -387,8 +387,8 @@ local function main()
 
                         -- Update display if on reactor page
                         local index = 0
-                        for idx, reactorData in ipairs(reactorIDs) do
-                            if reactorData.id == message.id then
+                        for idx, reactorID in ipairs(reactorIDs) do
+                            if reactorID == message.id then
                                 index = idx
                                 break
                             end
@@ -400,7 +400,7 @@ local function main()
 
                         -- Update home page if necessary
                         if currentPage == "home" then
-                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
                         end
                     else
                         print("Invalid message received from reactor ID:", senderID)
