@@ -319,6 +319,9 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.write(statusText)
     monitor.setTextColor(style.style.textColor)
 
+    -- Compute total and current reactor outputs
+    local totalReactorOutput, currentReactorOutput = computeOutputs()
+
     -- Display "Total Reactor Output:"
     monitor.setCursorPos(1, totalOutputY)
     monitor.clearLine()
@@ -334,6 +337,25 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     local xCurrentOutput = math.floor((w - #currentOutputText) / 2) + 1
     monitor.setCursorPos(xCurrentOutput, currentOutputY)
     monitor.write(currentOutputText)
+
+    -- Compute total operational reactors and active reactors
+    local totalOperationalReactors = 0
+    local activeReactors = 0
+
+    for _, reactor in pairs(reactors) do
+        if not reactor.isMaintenance and not reactor.destroyed then
+            totalOperationalReactors = totalOperationalReactors + 1
+            if reactor.active then
+                activeReactors = activeReactors + 1
+            end
+        end
+    end
+
+    -- Calculate the fill percentage for the progress bar
+    local fillPercentage = 0
+    if totalOperationalReactors > 0 then
+        fillPercentage = (activeReactors / totalOperationalReactors) * 100
+    end
 
     -- Draw progress bar
     local progressBarWidth = w - 4  -- Leave some padding on sides
