@@ -11,7 +11,14 @@ print("Mainframe Computer ID:", os.getComputerID())
 
 -- Load allowed sender IDs from ids.lua
 local ids = require("ids")
-local allowedSenderIDs = ids.allowedSenderIDs  -- Correctly load allowedSenderIDs
+local reactorMainframeID = ids.reactorMainframeID
+local allowedSenderIDs = ids.allowedSenderIDs
+
+-- Debug: Print allowed sender IDs
+print("Allowed Sender IDs:")
+for _, id in ipairs(allowedSenderIDs) do
+    print(id, type(id))
+end
 
 -- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
@@ -60,7 +67,7 @@ end
 -- Helper function to check if a value exists in a table
 function table.contains(tbl, element)
     for _, value in pairs(tbl) do
-        if value == element then
+        if tonumber(value) == tonumber(element) then
             return true
         end
     end
@@ -433,7 +440,42 @@ local function displayHomePage()
     monitor.setTextColor(colors.white)
 end
 
--- Main function for live page updates and data processing
+-- Function to handle incoming data
+local function handleIncomingData()
+    while true do
+        local event, senderID, message, protocol = os.pullEvent("rednet_message")
+        if type(message) == "table" and message.command then
+            -- Debug: Print sender ID and type
+            print("Received message from sender ID:", senderID, "Type:", type(senderID))
+            if table.contains(allowedSenderIDs, senderID) then
+                if message.command == "pesu_data" then
+                    -- Store the PESU data from the sender
+                    pesuDataFromSenders[senderID] = message
+                    processPESUData()  -- Update data processing
+                    displayNeedsRefresh = true
+                    print("Processed PESU data from sender ID:", senderID)
+                elseif message.command == "panel_data" then
+                    -- Store the panel data from the sender
+                    panelDataList[senderID] = message.panelDataList[1]
+                    displayNeedsRefresh = true
+                    print("Processed panel data from sender ID:", senderID)
+                elseif message.command == "reactor_status" then
+                    reactorsStatus = message.status  -- "on" or "off"
+                    displayNeedsRefresh = true
+                    print("Updated reactor status to:", reactorsStatus)
+                else
+                    print("Unknown command from sender ID:", senderID)
+                end
+            else
+                print("Ignored data from sender ID:", senderID)
+            end
+        else
+            print("Warning: Received malformed data from Sender ID:", senderID)
+        end
+    end
+end
+
+-- Main function
 local function main()
     page = "home"  -- Ensure the page is set to "home" on start
 
@@ -479,40 +521,7 @@ local function main()
                 sleep(0.05)  -- Allow for faster reaction to button presses
             end
         end,
-        function()  -- Handle Incoming Data
-            while true do
-                local event, senderID, message, protocol = os.pullEvent("rednet_message")
-                if type(message) == "table" and message.command then
-                    if table.contains(allowedSenderIDs, senderID) then
-                        if message.command == "pesu_data" then
-                            -- Store the PESU data from the sender
-                            pesuDataFromSenders[senderID] = message
-                            processPESUData()  -- Update data processing
-                            displayNeedsRefresh = true
-                            -- Console message
-                            print("Processed PESU data from sender ID:", senderID)
-                        elseif message.command == "panel_data" then
-                            -- Store the panel data from the sender
-                            panelDataList[senderID] = message.panelDataList[1]
-                            displayNeedsRefresh = true
-                            -- Console message
-                            print("Processed panel data from sender ID:", senderID)
-                        elseif message.command == "reactor_status" then
-                            reactorsStatus = message.status  -- "on" or "off"
-                            displayNeedsRefresh = true
-                            -- Console message
-                            print("Updated reactor status to:", reactorsStatus)
-                        else
-                            print("Unknown command from sender ID:", senderID)
-                        end
-                    else
-                        print("Ignored data from sender ID:", senderID)
-                    end
-                else
-                    print("Warning: Received malformed data from Sender ID:", senderID)
-                end
-            end
-        end
+        handleIncomingData
     )
 end
 
