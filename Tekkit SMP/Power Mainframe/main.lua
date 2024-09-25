@@ -10,8 +10,8 @@ rednet.open("top")
 print("Mainframe Computer ID:", os.getComputerID())
 
 -- Load allowed sender IDs from ids.lua
-local ids = dofile("ids.lua")
-local allowedSenderIDs = ids.allowedSenderIDs
+local ids = require("ids")
+local reactorMainframeID = ids.reactorMainframeID
 
 -- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
