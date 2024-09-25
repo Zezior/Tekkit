@@ -88,14 +88,14 @@ local function getReactorData()
 
     if not infoPanel then
         print("[Error] Advanced Information Panel not found on side: " .. config.infoPanelSide)
-        reactorStatus = "offline"
+        reactorStatus = "Destroyed"
         reactorName = loadReactorName()
     else
         local success, data = pcall(infoPanel.getCardData)
         if success and data then
             reactorName = data[1] or "Unknown Reactor"
             if reactorName == "Target Not Found" then
-                reactorStatus = "offline"
+                reactorStatus = "Destroyed"
                 reactorName = loadReactorName()
             else
                 -- Save the reactor's name to a file if it's not already saved
@@ -105,7 +105,7 @@ local function getReactorData()
             end
         else
             print("[Error] Failed to retrieve reactor info from the panel.")
-            reactorStatus = "offline"
+            reactorStatus = "Destroyed"
             reactorName = loadReactorName()
         end
     end
@@ -128,7 +128,7 @@ local function getReactorData()
         active = redstone.getOutput(config.redstoneSide),  -- Reactor active status based on redstone signal
         fuelRemaining = fuelValue,                     -- Remaining fuel info
         id = os.getComputerID(),                       -- Reactor computer ID
-        status = reactorStatus                         -- Reactor status: "online" or "offline"
+        status = reactorStatus                         -- Reactor status: "online" or "Destroyed"
     }
 end
 
