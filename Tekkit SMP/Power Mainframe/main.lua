@@ -371,7 +371,7 @@ local function displayHomePage()
     end
 
     -- Display reactor status above progress bar
-    local reactorStatusY = h - 9
+    local reactorStatusY = h - 10
     if reactorsStatus == "on" then
         monitor.setTextColor(colors.green)
         centerText("Reactors are ON", reactorStatusY)
@@ -379,6 +379,14 @@ local function displayHomePage()
         monitor.setTextColor(colors.red)
         centerText("Reactors are OFF", reactorStatusY)
     end
+
+    -- Display total power capacity
+    local capacityY = reactorStatusY + 1
+    monitor.setTextColor(colors.white)
+    local capacityInBillions = totalCapacity / 1000000000
+    local capacityText = string.format("Total Power Capacity: %d Billion EU", capacityInBillions)
+    centerText(capacityText, capacityY)
+
     monitor.setTextColor(colors.white)
 
     -- Display total fill percentage as a progress bar, centered above buttons
