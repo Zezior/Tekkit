@@ -1,5 +1,8 @@
 -- activity_check.lua
 
+local ids = dofile("ids.lua")
+local reactorMainframeID = ids.reactorMainframeID  -- Add this to your ids.lua
+
 local monitorSide = "right"
 local modemSide = "front"
 local monitor = peripheral.wrap(monitorSide)
@@ -119,8 +122,8 @@ local function waitForChunksToLoad(seconds, status)
             timerID = os.startTimer(1)
         elseif event == "rednet_message" then
             local senderID, message, protocol = p1, p2, p3
-            if message.command == "check_players" then
-                rednet.send(senderID, {playersOnline = anyOnline}, "player_status")
+            if message.command == "check_players" and senderID == reactorMainframeID then
+                rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
             end
         end
     end
@@ -129,9 +132,9 @@ end
 local function sendPlayerStatus()
     while true do
         if anyOnline then
-            rednet.broadcast({command = "player_online"}, "reactor_control")
+            rednet.send(reactorMainframeID, {command = "player_online"}, "reactor_control")
         else
-            rednet.broadcast({command = "player_offline"}, "reactor_control")
+            rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
         end
         sleep(60)  -- Send status every 60 seconds
     end
@@ -140,8 +143,8 @@ end
 local function handleMessages()
     while true do
         local event, senderID, message, protocol = os.pullEvent("rednet_message")
-        if message.command == "check_players" then
-            rednet.send(senderID, {playersOnline = anyOnline}, "player_status")
+        if message.command == "check_players" and senderID == reactorMainframeID then
+            rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
         end
     end
 end
@@ -161,8 +164,8 @@ local function mainLoop()
             timerID = os.startTimer(1)
         elseif event == "rednet_message" then
             local senderID, message, protocol = p1, p2, p3
-            if message.command == "check_players" then
-                rednet.send(senderID, {playersOnline = anyOnline}, "player_status")
+            if message.command == "check_players" and senderID == reactorMainframeID then
+                rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
             end
         end
     end
@@ -199,7 +202,7 @@ local function mainLoop()
                 end
 
                 -- After chunks are loaded, send message to mainframe
-                rednet.broadcast({command = "player_online"}, "reactor_control")
+                rednet.send(reactorMainframeID, {command = "player_online"}, "reactor_control")
                 print("Sent player_online command to mainframe.")
 
                 anyPlayerOnlinePreviously = true  -- Update the flag
@@ -218,7 +221,7 @@ local function mainLoop()
             if anyPlayerOnlinePreviously then
                 -- Only execute when players just went offline
                 -- Send message to mainframe
-                rednet.broadcast({command = "player_offline"}, "reactor_control")
+                rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
                 print("Sent player_offline command to mainframe.")
                 chunkLoadWaitCompleted = false  -- Reset chunk load wait flag
                 anyPlayerOnlinePreviously = false  -- Update the flag
@@ -241,8 +244,8 @@ local function mainLoop()
                     timerID = os.startTimer(1)
                 elseif event == "rednet_message" then
                     local senderID, message, protocol = p1, p2, p3
-                    if message.command == "check_players" then
-                        rednet.send(senderID, {playersOnline = anyOnline}, "player_status")
+                    if message.command == "check_players" and senderID == reactorMainframeID then
+                        rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
                     end
                 end
             end
@@ -287,8 +290,8 @@ local function mainLoop()
                 local event, p1, p2, p3 = os.pullEvent("rednet_message")
                 if event == "rednet_message" then
                     local senderID, message, protocol = p1, p2, p3
-                    if message.command == "check_players" then
-                        rednet.send(senderID, {playersOnline = anyOnline}, "player_status")
+                    if message.command == "check_players" and senderID == reactorMainframeID then
+                        rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
                     end
                 end
             end

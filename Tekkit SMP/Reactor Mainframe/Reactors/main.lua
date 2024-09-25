@@ -1,12 +1,12 @@
 -- Reactor Mainframe - main.lua
 
 local ui = require("ui")
-local reactorsModule = require("reactors")
 local ids = require("ids")
 
 local reactorIDs = ids.reactorIDs
 local activityCheckID = ids.activityCheckID
 local powerMainframeID = ids.powerMainframeID
+local reactorMainframeID = ids.reactorMainframeID
 
 table.sort(reactorIDs)
 local minReactorID = reactorIDs[1] or 0
@@ -180,9 +180,9 @@ local function switchPage(page)
                 print("Invalid reactor page number:", pageNumString)
                 return
             end
-            reactorsModule.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
+            ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
         else
-            ui.displayPlaceholderPage(currentPage)
+            -- Placeholder for other pages if needed
         end
     else
         print("Page not found: " .. page)
@@ -191,7 +191,7 @@ end
 
 -- Function to send reactor status to power mainframe
 local function sendReactorStatus(status)
-    rednet.broadcast({command = "reactor_status", status = status}, "reactor_control")
+    rednet.send(powerMainframeID, {command = "reactor_status", status = status}, "reactor_control")
 end
 
 -- Function to handle messages from the activity check computer
@@ -241,7 +241,7 @@ local function handleActivityCheckMessage(message)
         end
     elseif message.command == "check_players" then
         -- Send player online status to the requester
-        rednet.send(message.senderID, {playersOnline = anyPlayerOnline}, "player_status")
+        rednet.send(activityCheckID, {playersOnline = anyPlayerOnline}, "player_status")
     else
         print("Unknown command from activity check computer:", message.command)
     end
@@ -353,8 +353,20 @@ local function main()
                         sendReactorStatus(anyReactorOff and "on" or "off")
                         -- Update display
                         ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
+                    elseif action == "reactor1" then
+                        switchPage("reactor1")
+                    elseif action == "prev_page" then
+                        local pageNum = tonumber(string.sub(currentPage, 8))
+                        if pageNum > 1 then
+                            switchPage("reactor" .. (pageNum - 1))
+                        end
+                    elseif action == "next_page" then
+                        local pageNum = tonumber(string.sub(currentPage, 8))
+                        if pageNum < numReactorPages then
+                            switchPage("reactor" .. (pageNum + 1))
+                        end
                     else
-                        switchPage(action)  -- Switch pages based on the action
+                        -- Handle other actions if necessary
                     end
                 end
             end
@@ -440,7 +452,7 @@ local function main()
                         end
                         local pageNum = math.ceil(index / reactorsPerPage)
                         if currentPage == "reactor" .. pageNum then
-                            reactorsModule.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
+                            ui.displayReactorData(reactors, pageNum, numReactorPages, reactorIDs)
                         end
 
                         -- Update home page if necessary
