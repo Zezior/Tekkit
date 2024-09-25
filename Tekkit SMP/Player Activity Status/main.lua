@@ -11,7 +11,7 @@ monitor.setPaletteColor(bgColor, 18 / 255, 53 / 255, 36 / 255)  -- RGB values fo
 -- Apply background color and text settings
 monitor.setBackgroundColor(bgColor)
 monitor.setTextColor(colors.white)
-monitor.setTextScale(0.5)
+monitor.setTextScale(1)  -- Increased text scale for larger font
 monitor.clear()
 
 -- List of introspection modules and corresponding player names
@@ -68,12 +68,14 @@ local function drawBorder()
         monitor.setCursorPos(w, i)
         monitor.write(" ")
     end
+    monitor.setTextColor(colors.white)
 end
 
-local function centerText(text, width)
-    local length = string.len(text)
-    local padding = math.floor((width - length) / 2)
-    return string.rep(" ", padding) .. text
+local function centerText(text, y)
+    local w, h = monitor.getSize()
+    local x = math.floor((w - string.len(text)) / 2) + 1
+    monitor.setCursorPos(x, y)
+    monitor.write(text)
 end
 
 local function displayToMonitor(lines)
@@ -89,15 +91,12 @@ local function displayToMonitor(lines)
                 monitor.setTextColor(colors.green)
             elseif status == "Offline" then
                 monitor.setTextColor(colors.red)
-            elseif status == "Checking..." then
-                monitor.setTextColor(colors.yellow)
             elseif status:find("Waiting for Chunks") then
                 monitor.setTextColor(colors.yellow)
             else
                 monitor.setTextColor(colors.white)
             end
-            monitor.setCursorPos(2, startLine + i - 1)
-            monitor.write(centerText(line, w - 2))
+            centerText(line, startLine + i - 1)
         end
     end
     monitor.setTextColor(colors.white)

@@ -171,7 +171,7 @@ local function switchPage(page)
     if pages[page] then
         currentPage = page
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
         elseif string.sub(currentPage, 1, 7) == "reactor" then
             -- Extract page number
             local pageNumString = string.sub(currentPage, 8)
@@ -220,7 +220,7 @@ local function handleActivityCheckMessage(message)
 
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
         end
     elseif message.command == "player_offline" then
         print("Received player_offline command from activity check computer.")
@@ -237,7 +237,7 @@ local function handleActivityCheckMessage(message)
         sendReactorStatus("off")
         -- Update the display
         if currentPage == "home" then
-            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
         end
     elseif message.command == "check_players" then
         -- Send player online status to the requester
@@ -285,12 +285,13 @@ local function handlePowerMainframeMessage(message)
         end
         sendReactorStatus("off")
     else
-        print("Unknown command from power mainframe:", message.command)
+        -- Ignore unknown commands from power mainframe
+        -- Suppress the "Unknown command" message
     end
 
     -- Update the display
     if currentPage == "home" then
-        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
     end
 end
 
@@ -303,7 +304,7 @@ local function main()
     loadPowerLog()
 
     -- Display the home page initially
-    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+    ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
 
     -- Bind reactor buttons using repo
     ui.bindReactorButtons(reactorTable, repo)
@@ -351,7 +352,7 @@ local function main()
                         savePowerLog("turn_off")
                         sendReactorStatus(anyReactorOff and "on" or "off")
                         -- Update display
-                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+                        ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
                     else
                         switchPage(action)  -- Switch pages based on the action
                     end
@@ -375,8 +376,6 @@ local function main()
                         -- Store the latest reactor data
                         reactors[message.id] = message
                         -- Suppress console output for reactor data
-                        -- print("Reactor data received for ID:", message.id)
-                        -- print("Message content:", textutils.serialize(message))
 
                         -- Handle reactor status
                         if message.status == "Destroyed" then
@@ -427,7 +426,6 @@ local function main()
                                     }
                                     saveReactorOutputLog()
                                     -- Suppress this print statement
-                                    -- print("Stored reactor output for ID:", message.id)
                                 end
                             end
                         end
@@ -447,7 +445,7 @@ local function main()
 
                         -- Update home page if necessary
                         if currentPage == "home" then
-                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog)
+                            ui.displayHomePage(repo, reactorTable, reactors, numReactorPages, reactorOutputLog, reactorsOnDueToPESU)
                         end
                     else
                         print("Invalid message received from reactor ID:", senderID)

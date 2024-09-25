@@ -434,15 +434,6 @@ local function displayHomePage()
     monitor.setTextColor(colors.white)
 end
 
--- Function to send reactor status to the reactor mainframe every 60 seconds
-local function sendReactorStatus()
-    while true do
-        -- Send message to reactor mainframe
-        rednet.broadcast({command = "reactor_status", status = reactorsStatus}, "reactor_control")
-        sleep(60)  -- Send status every 60 seconds
-    end
-end
-
 -- Main function for live page updates and data processing
 local function main()
     page = "home"  -- Ensure the page is set to "home" on start
@@ -522,8 +513,8 @@ local function main()
                     print("Warning: Received malformed data from Sender ID:", senderID)
                 end
             end
-        end,
-        sendReactorStatus  -- Send reactor status every 60 seconds
+        end
+        -- Removed sendReactorStatus function
     )
 end
 
