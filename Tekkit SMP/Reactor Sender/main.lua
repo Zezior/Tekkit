@@ -5,6 +5,7 @@ local config = {
     updateInterval = 30,         -- Time in seconds between data updates
     redstoneSide = "top",        -- The side where redstone controls the reactor
     infoPanelSide = "front",     -- Side where the advanced information panel is connected
+    reactorNameFile = "reactor_name.txt"  -- File to store the reactor's name
 }
 
 -- Function to detect and open the wireless Rednet modem
@@ -50,47 +51,84 @@ local function controlReactor(state)
     end
 end
 
+-- Function to save the reactor's original name to a file
+local function saveReactorName(name)
+    local file = fs.open(config.reactorNameFile, "w")
+    if file then
+        file.write(name)
+        file.close()
+        print("Saved reactor name to file:", name)
+    else
+        print("[Error] Failed to save reactor name to file.")
+    end
+end
+
+-- Function to load the reactor's name from the file
+local function loadReactorName()
+    if fs.exists(config.reactorNameFile) then
+        local file = fs.open(config.reactorNameFile, "r")
+        if file then
+            local name = file.readAll()
+            file.close()
+            return name
+        else
+            print("[Error] Failed to read reactor name from file.")
+            return "Unknown Reactor"
+        end
+    else
+        return "Unknown Reactor"
+    end
+end
+
 -- Function to retrieve reactor metadata from the advanced info panel
 local function getReactorData()
     local infoPanel = peripheral.wrap(config.infoPanelSide)
     local reactorStatus = "online"
+    local reactorName = "Unknown Reactor"
 
     if not infoPanel then
         print("[Error] Advanced Information Panel not found on side: " .. config.infoPanelSide)
         reactorStatus = "offline"
-    end
-
-    local data = nil
-    if infoPanel then
-        local success, result = pcall(infoPanel.getCardData)
-        if success and result then
-            data = result
+        reactorName = loadReactorName()
+    else
+        local success, data = pcall(infoPanel.getCardData)
+        if success and data then
+            reactorName = data[1] or "Unknown Reactor"
+            if reactorName == "Target Not Found" then
+                reactorStatus = "offline"
+                reactorName = loadReactorName()
+            else
+                -- Save the reactor's name to a file if it's not already saved
+                if not fs.exists(config.reactorNameFile) then
+                    saveReactorName(reactorName)
+                end
+            end
         else
             print("[Error] Failed to retrieve reactor info from the panel.")
             reactorStatus = "offline"
+            reactorName = loadReactorName()
         end
     end
 
     local tempValue = "N/A"
     local outputValue = "0"
     local fuelValue = "N/A"
-    local titleValue = "Unknown"
 
-    if data then
-        titleValue = data[1] or "Unknown"
+    if infoPanel and reactorStatus == "online" then
+        local data = infoPanel.getCardData()
         tempValue = data[2] and data[2]:gsub("Temp:%s*", ""):gsub("C", ""):gsub("%s", "") or "N/A"
         outputValue = data[6] and data[6]:gsub("Output:%s*", ""):gsub(" EU/t", ""):gsub("%s", "") or "0"
         fuelValue = data[7] and data[7]:gsub("Remaining:%s*", "") or "N/A"
     end
 
     return {
-        title = titleValue,                           -- Reactor title/name
-        temp = tempValue,                             -- Reactor temperature
-        euOutput = outputValue,                       -- Reactor EU Output
+        title = reactorName,                           -- Reactor title/name
+        temp = tempValue,                              -- Reactor temperature
+        euOutput = outputValue,                        -- Reactor EU Output
         active = redstone.getOutput(config.redstoneSide),  -- Reactor active status based on redstone signal
-        fuelRemaining = fuelValue,                    -- Remaining fuel info
-        id = os.getComputerID(),                      -- Reactor computer ID
-        status = reactorStatus                        -- Reactor status: "online" or "offline"
+        fuelRemaining = fuelValue,                     -- Remaining fuel info
+        id = os.getComputerID(),                       -- Reactor computer ID
+        status = reactorStatus                         -- Reactor status: "online" or "offline"
     }
 end
 
