@@ -65,9 +65,6 @@ local reactorsAreOn = false  -- Track if reactors are on
 local totalEUOutput = 0   -- Total EU/t output from reactors
 local timeToFullCharge = 0   -- Time in seconds until full charge
 
--- Variable to track refresh countdown
-local refreshCountdown = refreshInterval
-
 -- Function to format EU values
 local function formatEU(value)
     if value >= 1e12 then
@@ -470,11 +467,7 @@ local function displayHomePage()
     -- Center the capacityText
     centerText(capacityText, capacityY)
 
-    -- Remove UK Time display
-
-    -- Display "Refresh in: X" at the top right corner
-    monitor.setCursorPos(w - 15, 1)
-    monitor.write("Refresh in: " .. tostring(refreshCountdown))
+    -- Remove "Refresh in:" display
 
     -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = 0
@@ -526,6 +519,14 @@ end
 local function sendCommand(command)
     rednet.send(reactorMainframeID, {command = command}, "reactor_control")
     print("Sent command to reactor mainframe:", command)
+end
+
+-- Function to request reactor data
+local function requestReactorData()
+    -- Send a request for reactor status
+    rednet.send(reactorMainframeID, {command = "request_reactor_status"}, "reactor_control")
+    -- Send a request for total EU output
+    rednet.send(reactorMainframeID, {command = "request_total_eu_output"}, "reactor_control")
 end
 
 -- Function to monitor PESU levels and control reactors
@@ -599,21 +600,17 @@ local function handleIncomingData()
     end
 end
 
--- Function to periodically update time to full charge and refresh display
+-- Function to periodically request reactor data and refresh display
 local function periodicUpdater()
     while true do
-        -- Reset refresh countdown
-        refreshCountdown = refreshInterval
+        -- Request reactor data
+        requestReactorData()
 
-        -- Update display immediately
+        -- Update display
         displayNeedsRefresh = true
 
-        -- Countdown loop
-        for i = refreshInterval, 1, -1 do
-            refreshCountdown = i
-            displayNeedsRefresh = true
-            sleep(1)
-        end
+        -- Wait for refreshInterval seconds
+        sleep(refreshInterval)
     end
 end
 
