@@ -3,8 +3,8 @@
 local config = {
     mainframeID = 4709,          -- Rednet ID of the main control computer (update if needed)
     updateInterval = 30,         -- Time in seconds between data updates
-    redstoneSide = "top",        -- The side where redstone controls the reactor
-    infoPanelSide = "front",     -- Side where the advanced information panel is connected
+    redstoneSide = "back",        -- The side where redstone controls the reactor
+    infoPanelSide = "bottom",     -- Side where the advanced information panel is connected
     reactorNameFile = "reactor_name.txt"  -- File to store the reactor's name
 }
 
