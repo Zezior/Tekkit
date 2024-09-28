@@ -1,5 +1,7 @@
+-- Player Activity main.lua
+
 local ids = dofile("ids.lua")
-local reactorMainframeID = ids.reactorMainframeID  -- Add this to your ids.lua
+local reactorMainframeID = ids.reactorMainframeID  -- Ensure this is defined in your ids.lua
 
 local monitorSide = "right"
 local modemSide = "front"
@@ -94,11 +96,17 @@ local function displayToMonitor(lines)
                 monitor.setTextColor(colors.red)
             elseif status:find("Waiting for Chunks") then
                 monitor.setTextColor(colors.yellow)
-            elseif status:find("Rechecking") then
+            elseif status == "Online (grace period)" then
                 monitor.setTextColor(colors.yellow)
+            elseif status == "Unavailable" then
+                monitor.setTextColor(colors.gray)
             else
                 monitor.setTextColor(colors.white)
             end
+            centerText(line, startLine + i - 1)
+        else
+            -- If line doesn't match the pattern, just display it normally
+            monitor.setTextColor(colors.white)
             centerText(line, startLine + i - 1)
         end
     end
@@ -149,6 +157,16 @@ local function handleMessages()
     end
 end
 
+-- Function to safely check if a value exists in a table
+local function tableContains(tbl, val)
+    for _, value in pairs(tbl) do
+        if value == val then
+            return true
+        end
+    end
+    return false
+end
+
 local function mainLoop()
     -- Initial countdown
     local countdown = 10
@@ -170,6 +188,9 @@ local function mainLoop()
         end
     end
 
+    local playerNotSeenCounter = {}
+    local offlineThreshold = 15  -- Number of consecutive failed checks before declaring offline
+
     while true do
         local status = {}
         anyOnline = false
@@ -179,10 +200,19 @@ local function mainLoop()
             local introspection = peripheral.wrap(module.side)
             if introspection then
                 local playerOnline = checkPlayerOnline(introspection)
-                local playerStatus = playerOnline and "Online" or "Offline"
-                status[module.name] = playerStatus
                 if playerOnline then
+                    status[module.name] = "Online"
                     anyOnline = true
+                    playerNotSeenCounter[module.name] = 0  -- Reset counter
+                else
+                    -- Increment the not seen counter
+                    playerNotSeenCounter[module.name] = (playerNotSeenCounter[module.name] or 0) + 1
+                    if playerNotSeenCounter[module.name] < offlineThreshold then
+                        status[module.name] = "Online (grace period)"
+                        anyOnline = true
+                    else
+                        status[module.name] = "Offline"
+                    end
                 end
             else
                 status[module.name] = "Unavailable"
@@ -221,58 +251,11 @@ local function mainLoop()
             if anyPlayerOnlinePreviously then
                 -- Only execute when players just went offline
 
-                -- Start recheck mechanism
-                local recheckAttempts = 5
-                local recheckInterval = 1  -- in seconds
-                local playerCameBackOnline = false
-
-                for attempt = 1, recheckAttempts do
-                    sleep(recheckInterval)  -- Wait for 1 second
-
-                    -- Recheck player status
-                    anyOnline = false
-                    for _, module in ipairs(introspectionModules) do
-                        local introspection = peripheral.wrap(module.side)
-                        if introspection then
-                            local playerOnline = checkPlayerOnline(introspection)
-                            local playerStatus = playerOnline and "Online" or "Offline"
-                            status[module.name] = playerStatus
-                            if playerOnline then
-                                anyOnline = true
-                            end
-                        else
-                            status[module.name] = "Unavailable"
-                            print("Introspection module on side " .. module.side .. " is unavailable.")
-                        end
-                    end
-
-                    -- Update display to show rechecking
-                    local displayLines = {}
-                    for _, module in ipairs(introspectionModules) do
-                        displayLines[#displayLines + 1] = module.name .. ": " .. status[module.name]
-                    end
-                    displayLines[#displayLines + 1] = "Rechecking players... (" .. attempt .. "/" .. recheckAttempts .. ")"
-                    displayLines[#displayLines + 1] = "UK Time: " .. getCurrentTime()
-                    displayToMonitor(displayLines)
-
-                    if anyOnline then
-                        -- Player is back online, exit recheck loop
-                        print("Player is back online during recheck. Skipping 'player_offline' command.")
-                        playerCameBackOnline = true
-                        break
-                    end
-                end
-
-                if not playerCameBackOnline then
-                    -- After rechecking, still no players online
-                    rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
-                    print("Sent player_offline command to mainframe.")
-                    chunkLoadWaitCompleted = false  -- Reset chunk load wait flag
-                    anyPlayerOnlinePreviously = false  -- Update the flag
-                else
-                    -- Players are back online, continue normal operations
-                    anyPlayerOnlinePreviously = true
-                end
+                -- Send player_offline command
+                rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
+                print("Sent player_offline command to mainframe.")
+                chunkLoadWaitCompleted = false  -- Reset chunk load wait flag
+                anyPlayerOnlinePreviously = false  -- Update the flag
             end
 
             -- Update display to show no players online
@@ -286,7 +269,7 @@ local function mainLoop()
         end
 
         -- Short sleep to prevent high CPU usage
-        sleep(0.1)
+        sleep(1)
     end
 end
 
