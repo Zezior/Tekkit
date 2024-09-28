@@ -164,6 +164,7 @@ local function handleActivityCheckMessage(message)
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     if not state then
                         repo.set(id .. "_state", true)
+                        reactors[id].active = true  -- Update reactors table
                         rednet.send(id, {command = "turn_on"})
                         reactorsTurnedOn = true
                     end
@@ -197,6 +198,7 @@ local function handleActivityCheckMessage(message)
                 local state = repo.get(id .. "_state")
                 if state then
                     repo.set(id .. "_state", false)
+                    reactors[id].active = false  -- Update reactors table
                     rednet.send(id, {command = "turn_off"})
                     reactorsTurnedOff = true
                 end
@@ -229,6 +231,7 @@ local function handleActivityCheckMessage(message)
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     if not state then
                         repo.set(id .. "_state", true)
+                        reactors[id].active = true  -- Update reactors table
                         rednet.send(id, {command = "turn_on"})
                         reactorsTurnedOn = true
                     end
@@ -275,6 +278,7 @@ local function handlePowerMainframeMessage(message)
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     if not state then
                         repo.set(id .. "_state", true)
+                        reactors[id].active = true  -- Update reactors table
                         rednet.send(id, {command = "turn_on"})
                         reactorsTurnedOn = true
                     end
@@ -303,6 +307,7 @@ local function handlePowerMainframeMessage(message)
             local state = repo.get(id .. "_state")
             if state then
                 repo.set(id .. "_state", false)
+                reactors[id].active = false  -- Update reactors table
                 rednet.send(id, {command = "turn_off"})
                 reactorsTurnedOff = true
             end
@@ -422,6 +427,7 @@ local function main()
             local state = repo.get(reactorID .. "_state")
             if state then
                 repo.set(reactorID .. "_state", false)
+                reactors[reactorID].active = false  -- Update reactors table
                 rednet.send(reactorID, {command = "turn_off"})
                 reactorsTurnedOff = true
             end
@@ -492,6 +498,9 @@ local function main()
                                     reactorsChanged = true
                                 end
                             end
+                            if reactorsChanged then
+                                sendReactorStatus("off")
+                            end
                         else
                             -- Turn on reactors
                             for _, reactorID in ipairs(reactorIDs) do
@@ -506,6 +515,9 @@ local function main()
                                         reactorsChanged = true
                                     end
                                 end
+                            end
+                            if reactorsChanged then
+                                sendReactorStatus("on")
                             end
                         end
                         -- Update display
@@ -572,6 +584,7 @@ local function main()
                                 rednet.send(reactorID, {command = "turn_off"})
                                 -- Update state in repo
                                 repo.set(reactorID .. "_state", false)
+                                reactors[reactorID].active = false  -- Update reactors table
                                 print("Reactor " .. reactorID .. " is overheating! Shutting down.")
                             elseif temp and temp < 3000 then
                                 -- Clear overheating flag if temp is below threshold
