@@ -68,22 +68,12 @@ local timeToFullCharge = 0   -- Time in seconds until full charge
 -- Variable to track refresh countdown
 local refreshCountdown = refreshInterval
 
--- Function to get current time
-local function getCurrentTime()
-    local time = os.date("*t")
-    time.hour = time.hour + 1  -- Adjust for timezone if necessary
-    if time.hour >= 24 then
-        time.hour = time.hour - 24
-    end
-    return string.format("%02d:%02d:%02d", time.hour, time.min, time.sec)
-end
-
 -- Function to format EU values
 local function formatEU(value)
     if value >= 1e12 then
         return string.format("%.2f T EU", value / 1e12)
     elseif value >= 1e9 then
-        return string.format("%.2f G EU", value / 1e9)
+        return string.format("%.2f Bil", value / 1e9)  -- Changed from G EU to Bil
     elseif value >= 1e6 then
         return string.format("%.2f M EU", value / 1e6)
     elseif value >= 1e3 then
@@ -98,7 +88,7 @@ local function formatEUt(value)
     if value >= 1e12 then
         return string.format("%.2f T EU/t", value / 1e12)
     elseif value >= 1e9 then
-        return string.format("%.2f G EU/t", value / 1e9)
+        return string.format("%.2f Bil/t", value / 1e9)  -- Changed from G EU/t to Bil/t
     elseif value >= 1e6 then
         return string.format("%.2f M EU/t", value / 1e6)
     elseif value >= 1e3 then
@@ -480,10 +470,7 @@ local function displayHomePage()
     monitor.setCursorPos(3, capacityY)
     monitor.write(capacityText)
 
-    -- Display current time
-    local timeY = capacityY + 1
-    monitor.setCursorPos(3, timeY)
-    monitor.write("UK Time: " .. getCurrentTime())
+    -- Remove UK Time display
 
     -- Display "Refresh in: X" at the top right corner
     monitor.setCursorPos(w - 15, 1)
