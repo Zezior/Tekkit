@@ -1,5 +1,3 @@
---Player Activity main.lua
-
 local ids = dofile("ids.lua")
 local reactorMainframeID = ids.reactorMainframeID  -- Add this to your ids.lua
 
@@ -96,6 +94,8 @@ local function displayToMonitor(lines)
                 monitor.setTextColor(colors.red)
             elseif status:find("Waiting for Chunks") then
                 monitor.setTextColor(colors.yellow)
+            elseif status:find("Rechecking") then
+                monitor.setTextColor(colors.yellow)
             else
                 monitor.setTextColor(colors.white)
             end
@@ -136,7 +136,7 @@ local function sendPlayerStatus()
         else
             rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
         end
-        sleep(5)  -- Send status every 60 seconds
+        sleep(5)  -- Send status every 5 seconds
     end
 end
 
@@ -220,81 +220,69 @@ local function mainLoop()
             -- No players online
             if anyPlayerOnlinePreviously then
                 -- Only execute when players just went offline
-                -- Send message to mainframe
-                rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
-                print("Sent player_offline command to mainframe.")
-                chunkLoadWaitCompleted = false  -- Reset chunk load wait flag
-                anyPlayerOnlinePreviously = false  -- Update the flag
-            end
 
-            -- Pausing countdown
-            local waiting = 15
-            local timerID = os.startTimer(1)
-            while waiting > 0 do
-                local event, p1, p2, p3 = os.pullEvent()
-                if event == "timer" and p1 == timerID then
+                -- Start recheck mechanism
+                local recheckAttempts = 5
+                local recheckInterval = 1  -- in seconds
+                local playerCameBackOnline = false
+
+                for attempt = 1, recheckAttempts do
+                    sleep(recheckInterval)  -- Wait for 1 second
+
+                    -- Recheck player status
+                    anyOnline = false
+                    for _, module in ipairs(introspectionModules) do
+                        local introspection = peripheral.wrap(module.side)
+                        if introspection then
+                            local playerOnline = checkPlayerOnline(introspection)
+                            local playerStatus = playerOnline and "Online" or "Offline"
+                            status[module.name] = playerStatus
+                            if playerOnline then
+                                anyOnline = true
+                            end
+                        else
+                            status[module.name] = "Unavailable"
+                            print("Introspection module on side " .. module.side .. " is unavailable.")
+                        end
+                    end
+
+                    -- Update display to show rechecking
                     local displayLines = {}
                     for _, module in ipairs(introspectionModules) do
                         displayLines[#displayLines + 1] = module.name .. ": " .. status[module.name]
                     end
-                    displayLines[#displayLines + 1] = "No players online, pausing: " .. waiting
+                    displayLines[#displayLines + 1] = "Rechecking players... (" .. attempt .. "/" .. recheckAttempts .. ")"
                     displayLines[#displayLines + 1] = "UK Time: " .. getCurrentTime()
                     displayToMonitor(displayLines)
-                    waiting = waiting - 1
-                    timerID = os.startTimer(1)
-                elseif event == "rednet_message" then
-                    local senderID, message, protocol = p1, p2, p3
-                    if message.command == "check_players" and senderID == reactorMainframeID then
-                        rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
+
+                    if anyOnline then
+                        -- Player is back online, exit recheck loop
+                        print("Player is back online during recheck. Skipping 'player_offline' command.")
+                        playerCameBackOnline = true
+                        break
                     end
+                end
+
+                if not playerCameBackOnline then
+                    -- After rechecking, still no players online
+                    rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
+                    print("Sent player_offline command to mainframe.")
+                    chunkLoadWaitCompleted = false  -- Reset chunk load wait flag
+                    anyPlayerOnlinePreviously = false  -- Update the flag
+                else
+                    -- Players are back online, continue normal operations
+                    anyPlayerOnlinePreviously = true
                 end
             end
 
-            -- After pause, check status again
-            local retryLines = {}
+            -- Update display to show no players online
+            local displayLines = {}
             for _, module in ipairs(introspectionModules) do
-                retryLines[#retryLines + 1] = module.name .. ": " .. status[module.name]
+                displayLines[#displayLines + 1] = module.name .. ": " .. status[module.name]
             end
-            retryLines[#retryLines + 1] = "No players online, checking again..."
-            retryLines[#retryLines + 1] = "UK Time: " .. getCurrentTime()
-            displayToMonitor(retryLines)
-
-            -- Keep checking until someone comes online
-            while true do
-                anyOnline = false
-                for _, module in ipairs(introspectionModules) do
-                    local introspection = peripheral.wrap(module.side)
-                    if introspection then
-                        local playerOnline = checkPlayerOnline(introspection)
-                        local playerStatus = playerOnline and "Online" or "Offline"
-                        status[module.name] = playerStatus
-                        if playerOnline then
-                            anyOnline = true
-                        end
-                    else
-                        status[module.name] = "Unavailable"
-                        print("Introspection module on side " .. module.side .. " is unavailable.")
-                    end
-                end
-
-                if anyOnline then
-                    displayToMonitor({
-                        "At least one player is online, resuming...",
-                        "UK Time: " .. getCurrentTime()
-                    })
-                    sleep(1)
-                    break -- Exit loop to continue normal operations
-                end
-
-                -- Handle incoming messages during sleep
-                local event, p1, p2, p3 = os.pullEvent("rednet_message")
-                if event == "rednet_message" then
-                    local senderID, message, protocol = p1, p2, p3
-                    if message.command == "check_players" and senderID == reactorMainframeID then
-                        rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
-                    end
-                end
-            end
+            displayLines[#displayLines + 1] = "No players online."
+            displayLines[#displayLines + 1] = "UK Time: " .. getCurrentTime()
+            displayToMonitor(displayLines)
         end
 
         -- Short sleep to prevent high CPU usage
