@@ -2,9 +2,10 @@
 
 -- Configuration
 local monitorSide = "right"     -- Adjust based on your setup
+local modemSide = "top"         -- Adjust based on your setup
 
--- Open the modem on the "top" side
-rednet.open("top")
+-- Open the modem on the specified side
+rednet.open(modemSide)
 
 -- Output the computer ID
 print("Mainframe Computer ID:", os.getComputerID())
@@ -36,7 +37,7 @@ local buttonList = {}  -- Store buttons for click detection
 local w, h = monitor.getSize() -- Get the monitor's width and height
 local page = "home"  -- Start on Home Page
 local pagesData = {} -- Data for PESU pages
-local refreshInterval = 2  -- Refresh PESU data every 2 seconds
+local refreshInterval = 5  -- Refresh data every 5 seconds
 local totalStored, totalCapacity = 0, 0  -- Store totals
 local pesusPerColumn = 25  -- Number of PESUs per column
 local columnsPerPage = 3   -- Number of columns per page on PESU page
@@ -63,6 +64,49 @@ local reactorsAreOn = false  -- Track if reactors are on
 -- Variables to track reactor output and time to full charge
 local totalEUOutput = 0   -- Total EU/t output from reactors
 local timeToFullCharge = 0   -- Time in seconds until full charge
+
+-- Variable to track refresh countdown
+local refreshCountdown = refreshInterval
+
+-- Function to get current time
+local function getCurrentTime()
+    local time = os.date("*t")
+    time.hour = time.hour + 1  -- Adjust for timezone if necessary
+    if time.hour >= 24 then
+        time.hour = time.hour - 24
+    end
+    return string.format("%02d:%02d:%02d", time.hour, time.min, time.sec)
+end
+
+-- Function to format EU values
+local function formatEU(value)
+    if value >= 1e12 then
+        return string.format("%.2f T EU", value / 1e12)
+    elseif value >= 1e9 then
+        return string.format("%.2f G EU", value / 1e9)
+    elseif value >= 1e6 then
+        return string.format("%.2f M EU", value / 1e6)
+    elseif value >= 1e3 then
+        return string.format("%.2f k EU", value / 1e3)
+    else
+        return string.format("%.0f EU", value)
+    end
+end
+
+-- Function to format EU/t values
+local function formatEUt(value)
+    if value >= 1e12 then
+        return string.format("%.2f T EU/t", value / 1e12)
+    elseif value >= 1e9 then
+        return string.format("%.2f G EU/t", value / 1e9)
+    elseif value >= 1e6 then
+        return string.format("%.2f M EU/t", value / 1e6)
+    elseif value >= 1e3 then
+        return string.format("%.2f k EU/t", value / 1e3)
+    else
+        return string.format("%.0f EU/t", value)
+    end
+end
 
 -- Function to format percentages
 local function formatPercentage(value)
@@ -201,12 +245,12 @@ end
 
 -- Function to calculate time to full charge
 local function calculateTimeToFullCharge()
-    if reactorsAreOn and totalEUOutput > 0 then
-        local euPerSecond = totalEUOutput * 20  -- Convert EU/t to EU per second (20 ticks per second)
-        local euNeeded = totalCapacity - totalStored
-        timeToFullCharge = euNeeded / euPerSecond
-    else
+    local netInput = totalEUOutput * 20  -- Convert EU/t to EU per second (20 ticks per second)
+    if netInput <= 0 then
         timeToFullCharge = 0
+    else
+        local euNeeded = totalCapacity - totalStored
+        timeToFullCharge = euNeeded / netInput
     end
 end
 
@@ -221,7 +265,6 @@ local function processPESUData()
         print("Processing PESU data from sender ID:", senderID)
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
-                print("PESU Data:", pesuData.energy)
                 totalStored = totalStored + pesuData.energy  -- Stored EU
                 totalCapacity = totalCapacity + 1000000000  -- Fixed capacity 1,000,000,000
                 table.insert(pesuList, {
@@ -324,7 +367,7 @@ local function displayHomePage()
     local rightColumnX = leftColumnWidth + 2
 
     -- Left Column Title centered in left half
-    local leftTitle = "Most drained"
+    local leftTitle = "Most Drained"
     local leftTitleX = leftColumnX + math.floor((leftColumnWidth - #leftTitle) / 2)
     monitor.setCursorPos(leftTitleX, leftColumnStartY)
     monitor.write(leftTitle)
@@ -401,7 +444,7 @@ local function displayHomePage()
     end
 
     -- Display reactor status above progress bar
-    local reactorStatusY = h - 10
+    local reactorStatusY = h - 12
     if reactorsAreOn then
         monitor.setTextColor(colors.green)
         centerText("Reactors are ON", reactorStatusY)
@@ -409,35 +452,48 @@ local function displayHomePage()
         monitor.setTextColor(colors.red)
         centerText("Reactors are OFF", reactorStatusY)
     end
+    monitor.setTextColor(colors.white)
 
     -- Display time to full charge if reactors are on and timeToFullCharge > 0
+    local timeToFullChargeText = ""
     if reactorsAreOn and timeToFullCharge > 0 then
         local hours = math.floor(timeToFullCharge / 3600)
         local minutes = math.floor((timeToFullCharge % 3600) / 60)
-        local timeString = ""
+        local seconds = math.floor(timeToFullCharge % 60)
         if hours > 0 then
-            timeString = string.format("Power facility fully charged in: %dh %dmins", hours, minutes)
+            timeToFullChargeText = string.format("Power facility fully charged in: %dh %dm %ds", hours, minutes, seconds)
+        elseif minutes > 0 then
+            timeToFullChargeText = string.format("Power facility fully charged in: %dm %ds", minutes, seconds)
         else
-            timeString = string.format("Power facility fully charged in: %dmins", minutes)
+            timeToFullChargeText = string.format("Power facility fully charged in: %ds", seconds)
         end
-        monitor.setTextColor(colors.white)
-        centerText(timeString, reactorStatusY + 1)
     else
-        -- Clear the line if reactors are off or time is zero
-        monitor.setCursorPos(1, reactorStatusY + 1)
-        monitor.clearLine()
+        timeToFullChargeText = "Power facility fully charged in: N/A"
     end
+    monitor.setCursorPos(3, reactorStatusY + 1)
+    monitor.write(timeToFullChargeText)
 
     -- Display total power capacity
     local capacityY = reactorStatusY + 2
     monitor.setTextColor(colors.white)
-    local capacityText = string.format("Total Power Capacity: %d Billion EU", totalCapacity / 1000000000)
-    centerText(capacityText, capacityY)
+    local capacityText = string.format("Total Power Capacity: %s / %s", formatEU(totalStored), formatEU(totalCapacity))
+    monitor.setCursorPos(3, capacityY)
+    monitor.write(capacityText)
 
-    monitor.setTextColor(colors.white)
+    -- Display current time
+    local timeY = capacityY + 1
+    monitor.setCursorPos(3, timeY)
+    monitor.write("UK Time: " .. getCurrentTime())
+
+    -- Display "Refresh in: X" at the top right corner
+    monitor.setCursorPos(w - 15, 1)
+    monitor.write("Refresh in: " .. tostring(refreshCountdown))
 
     -- Display total fill percentage as a progress bar, centered above buttons
-    local totalFillPercentage = (totalStored / totalCapacity) * 100
+    local totalFillPercentage = 0
+    if totalCapacity > 0 then
+        totalFillPercentage = (totalStored / totalCapacity) * 100
+    end
     local progressBarWidth = w - 4  -- Leave some padding on sides
     local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
     local emptyBars = (progressBarWidth - 2) - filledBars
@@ -556,12 +612,34 @@ local function handleIncomingData()
     end
 end
 
--- Function to periodically update time to full charge
-local function periodicTimeUpdater()
+-- Function to periodically update time to full charge and refresh display
+local function periodicUpdater()
     while true do
-        sleep(60)  -- Update every minute
-        calculateTimeToFullCharge()
+        -- Reset refresh countdown
+        refreshCountdown = refreshInterval
+
+        -- Update display immediately
         displayNeedsRefresh = true
+
+        -- Countdown loop
+        for i = refreshInterval, 1, -1 do
+            refreshCountdown = i
+            displayNeedsRefresh = true
+            sleep(1)
+        end
+    end
+end
+
+-- Function to handle button presses
+local function handleButtonPresses()
+    while true do
+        local event, side, x, y = os.pullEvent("monitor_touch")
+        local action = detectClick(event, side, x, y)
+        if action then
+            action()  -- Switch pages based on button click
+            displayNeedsRefresh = true  -- Indicate that display needs to be refreshed
+        end
+        sleep(0.05)  -- Allow for faster reaction to button presses
     end
 end
 
@@ -600,20 +678,10 @@ local function main()
                 sleep(0.05)  -- Short sleep for smoother interaction
             end
         end,
-        function()  -- Handle Button Presses in Parallel
-            while true do
-                local event, side, x, y = os.pullEvent("monitor_touch")
-                local action = detectClick(event, side, x, y)
-                if action then
-                    action()  -- Switch pages based on button click
-                    displayNeedsRefresh = true  -- Indicate that display needs to be refreshed
-                end
-                sleep(0.05)  -- Allow for faster reaction to button presses
-            end
-        end,
+        handleButtonPresses,
         handleIncomingData,
         monitorPESU,  -- Add monitorPESU function to parallel execution
-        periodicTimeUpdater  -- Add periodicTimeUpdater function
+        periodicUpdater  -- Add periodicUpdater function
     )
 end
 
