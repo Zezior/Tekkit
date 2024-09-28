@@ -136,7 +136,7 @@ local function sendPlayerStatus()
         else
             rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
         end
-        sleep(60)  -- Send status every 60 seconds
+        sleep(5)  -- Send status every 60 seconds
     end
 end
 
