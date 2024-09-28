@@ -15,12 +15,6 @@ local ids = require("ids")
 local reactorMainframeID = ids.reactorMainframeID
 local allowedSenderIDs = ids.allowedSenderIDs
 
--- Debug: Print allowed sender IDs
-print("Allowed Sender IDs:")
-for _, id in ipairs(allowedSenderIDs) do
-    print(id, type(id))
-end
-
 -- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
@@ -54,9 +48,6 @@ local averageEUT = 0
 -- Variables to store panel data
 local panelDataList = {}  -- Stores panel data, indexed by senderID
 
--- Additional variables for timing
-local lastUpdateTime = os.clock()
-
 -- Variable to store reactor status
 local reactorsStatus = "off" -- Default status; will be updated based on received messages
 local reactorsAreOn = false  -- Track if reactors are on
@@ -64,6 +55,9 @@ local reactorsAreOn = false  -- Track if reactors are on
 -- Variables to track reactor output and time to full charge
 local totalEUOutput = 0   -- Total EU/t output from reactors
 local timeToFullCharge = nil   -- Time in seconds until full charge
+
+-- Variable to track refresh countdown
+local refreshCountdown = refreshInterval
 
 -- Function to format EU values
 local function formatEU(value)
@@ -250,10 +244,8 @@ local function processPESUData()
     totalStored = 0
     totalCapacity = 0
     pesuList = {}
-    local currentTime = os.time()
 
     for senderID, data in pairs(pesuDataFromSenders) do
-        print("Processing PESU data from sender ID:", senderID)
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
                 totalStored = totalStored + pesuData.energy  -- Stored EU
@@ -471,8 +463,6 @@ local function displayHomePage()
     -- Center the capacityText
     centerText(capacityText, capacityY)
 
-    -- Remove "Refresh in:" display
-
     -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = 0
     if totalCapacity > 0 then
@@ -480,7 +470,6 @@ local function displayHomePage()
     end
     local progressBarWidth = w - 4  -- Leave some padding on sides
     local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
-    local emptyBars = (progressBarWidth - 2) - filledBars
 
     local progressBarY = h - 7
 
@@ -522,14 +511,11 @@ end
 -- Function to send commands to reactor mainframe
 local function sendCommand(command)
     rednet.send(reactorMainframeID, {command = command}, "reactor_control")
-    print("Sent command to reactor mainframe:", command)
 end
 
 -- Function to request reactor data
 local function requestReactorData()
-    -- Send a request for reactor status
     rednet.send(reactorMainframeID, {command = "request_reactor_status"}, "reactor_control")
-    -- Send a request for total EU output
     rednet.send(reactorMainframeID, {command = "request_total_eu_output"}, "reactor_control")
 end
 
@@ -567,39 +553,25 @@ local function handleIncomingData()
     while true do
         local event, senderID, message, protocol = os.pullEvent("rednet_message")
         if type(message) == "table" and message.command then
-            -- Debug: Print sender ID and type
-            print("Received message from sender ID:", senderID, "Type:", type(senderID))
             if table.contains(allowedSenderIDs, senderID) or senderID == reactorMainframeID then
                 if message.command == "pesu_data" then
-                    -- Store the PESU data from the sender
                     pesuDataFromSenders[senderID] = message
-                    processPESUData()  -- Update data processing
+                    processPESUData()
                     displayNeedsRefresh = true
-                    print("Processed PESU data from sender ID:", senderID)
                 elseif message.command == "panel_data" then
-                    -- Store the panel data from the sender
                     panelDataList[senderID] = message.panelDataList[1]
                     displayNeedsRefresh = true
-                    print("Processed panel data from sender ID:", senderID)
                 elseif message.command == "reactor_status" then
                     reactorsStatus = message.status  -- "on" or "off"
                     reactorsAreOn = (message.status == "on")
                     calculateTimeToFullCharge()
                     displayNeedsRefresh = true
-                    print("Updated reactor status to:", reactorsStatus)
                 elseif message.command == "total_eu_output" and message.totalEUOutput then
                     totalEUOutput = message.totalEUOutput
-                    print("Received total EU/t output from reactor mainframe:", totalEUOutput)
                     calculateTimeToFullCharge()
                     displayNeedsRefresh = true
-                else
-                    print("Unknown command from sender ID:", senderID)
                 end
-            else
-                print("Ignored data from sender ID:", senderID)
             end
-        else
-            print("Warning: Received malformed data from Sender ID:", senderID)
         end
     end
 end
@@ -607,13 +579,8 @@ end
 -- Function to periodically request reactor data and refresh display
 local function periodicUpdater()
     while true do
-        -- Request reactor data
         requestReactorData()
-
-        -- Update display
         displayNeedsRefresh = true
-
-        -- Wait for refreshInterval seconds
         sleep(refreshInterval)
     end
 end
@@ -624,10 +591,10 @@ local function handleButtonPresses()
         local event, side, x, y = os.pullEvent("monitor_touch")
         local action = detectClick(event, side, x, y)
         if action then
-            action()  -- Switch pages based on button click
-            displayNeedsRefresh = true  -- Indicate that display needs to be refreshed
+            action()
+            displayNeedsRefresh = true
         end
-        sleep(0.05)  -- Allow for faster reaction to button presses
+        sleep(0.05)
     end
 end
 
@@ -648,28 +615,28 @@ local function main()
         function()  -- PESU Data Processing Loop
             while true do
                 processPESUData()
-                displayNeedsRefresh = true  -- Indicate that display needs to be refreshed
-                sleep(refreshInterval)  -- Wait for the next update
+                displayNeedsRefresh = true
+                sleep(refreshInterval)
             end
         end,
         function()  -- UI Loop for Live Page Updates
             while true do
                 if displayNeedsRefresh then
-                    centerButtons()  -- Update buttons based on current page
+                    centerButtons()
                     if page == "home" then
-                        displayHomePage()  -- Refresh homepage with live data
+                        displayHomePage()
                     elseif page == "pesu" then
-                        displayPESUPage(pagesData[currentPesuPage] or {})  -- Refresh PESU list page
+                        displayPESUPage(pagesData[currentPesuPage] or {})
                     end
                     displayNeedsRefresh = false
                 end
-                sleep(0.05)  -- Short sleep for smoother interaction
+                sleep(0.05)
             end
         end,
         handleButtonPresses,
         handleIncomingData,
-        monitorPESU,  -- Add monitorPESU function to parallel execution
-        periodicUpdater  -- Add periodicUpdater function
+        monitorPESU,
+        periodicUpdater
     )
 end
 
