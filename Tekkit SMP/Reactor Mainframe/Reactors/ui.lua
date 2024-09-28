@@ -1,4 +1,4 @@
--- ui.lua
+-- Reactor Mainframe ui.lua
 
 local monitor = peripheral.wrap("right")  -- Adjust as necessary
 local style = require("style")

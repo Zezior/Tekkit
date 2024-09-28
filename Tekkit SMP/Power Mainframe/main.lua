@@ -1,4 +1,4 @@
--- power_mainframe.lua
+-- Power mainframe main.lua
 
 -- Configuration
 local monitorSide = "right"     -- Adjust based on your setup

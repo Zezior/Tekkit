@@ -1,4 +1,4 @@
--- reactors.lua
+-- Reactor Mainframe reactors.lua
 
 local ui = require("ui")
 local style = require("style")

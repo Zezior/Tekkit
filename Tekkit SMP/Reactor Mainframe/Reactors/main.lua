@@ -1,4 +1,4 @@
--- Reactor Mainframe - main.lua
+-- Reactor Mainframe main.lua
 
 -- Import required modules
 local ui = require("ui")

@@ -1,4 +1,4 @@
--- rednet.lua
+-- Reactor Mainframe rednet.lua
 
 local modemSide = "top"  -- Adjust if needed
 rednet.open(modemSide)

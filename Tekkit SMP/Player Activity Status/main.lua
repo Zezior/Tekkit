@@ -1,4 +1,4 @@
--- activity_check.lua
+--Player Activity main.lua
 
 local ids = dofile("ids.lua")
 local reactorMainframeID = ids.reactorMainframeID  -- Add this to your ids.lua

@@ -1,4 +1,4 @@
--- Reactor ids.lua
+-- Reactor Mainframe ids.lua
 return {
     reactorIDs = {
         4708, -- Temp base

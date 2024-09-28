@@ -1,4 +1,4 @@
--- style.lua
+-- Reactor Mainframe style.lua
 
 local monitor = peripheral.wrap("right")
 

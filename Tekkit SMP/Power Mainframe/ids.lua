@@ -1,4 +1,4 @@
--- ids.lua
+-- Power mainframe ids.lua
 
 return {
     reactorMainframeID = 4709,  -- Replace with your reactor mainframe ID if different
