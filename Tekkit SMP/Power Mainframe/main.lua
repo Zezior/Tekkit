@@ -460,15 +460,15 @@ local function displayHomePage()
     else
         timeToFullChargeText = "Power facility fully charged in: N/A"
     end
-    monitor.setCursorPos(3, reactorStatusY + 1)
-    monitor.write(timeToFullChargeText)
+    -- Center the timeToFullChargeText
+    centerText(timeToFullChargeText, reactorStatusY + 1)
 
     -- Display total power capacity
     local capacityY = reactorStatusY + 2
     monitor.setTextColor(colors.white)
     local capacityText = string.format("Total Power Capacity: %s / %s", formatEU(totalStored), formatEU(totalCapacity))
-    monitor.setCursorPos(3, capacityY)
-    monitor.write(capacityText)
+    -- Center the capacityText
+    centerText(capacityText, capacityY)
 
     -- Remove UK Time display
 
