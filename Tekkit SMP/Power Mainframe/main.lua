@@ -63,7 +63,7 @@ local reactorsAreOn = false  -- Track if reactors are on
 
 -- Variables to track reactor output and time to full charge
 local totalEUOutput = 0   -- Total EU/t output from reactors
-local timeToFullCharge = 0   -- Time in seconds until full charge
+local timeToFullCharge = nil   -- Time in seconds until full charge
 
 -- Function to format EU values
 local function formatEU(value)
@@ -234,10 +234,14 @@ end
 local function calculateTimeToFullCharge()
     local netInput = totalEUOutput * 20  -- Convert EU/t to EU per second (20 ticks per second)
     if netInput <= 0 then
-        timeToFullCharge = 0
+        timeToFullCharge = nil
     else
         local euNeeded = totalCapacity - totalStored
-        timeToFullCharge = euNeeded / netInput
+        if euNeeded <= 0 then
+            timeToFullCharge = 0
+        else
+            timeToFullCharge = euNeeded / netInput
+        end
     end
 end
 
@@ -441,9 +445,9 @@ local function displayHomePage()
     end
     monitor.setTextColor(colors.white)
 
-    -- Display time to full charge if reactors are on and timeToFullCharge > 0
+    -- Display time to full charge
     local timeToFullChargeText = ""
-    if reactorsAreOn and timeToFullCharge > 0 then
+    if timeToFullCharge and timeToFullCharge > 0 then
         local hours = math.floor(timeToFullCharge / 3600)
         local minutes = math.floor((timeToFullCharge % 3600) / 60)
         local seconds = math.floor(timeToFullCharge % 60)
