@@ -5,7 +5,7 @@ local panelSide = "bottom"         -- Side where the advanced information panel 
 print("Panel Side:", panelSide)    -- Debugging line
 local mainframeID = 4644           -- Mainframe's Rednet ID
 local modemSide = "left"           -- Side where the modem is connected
-local updateInterval = 20          -- Time in seconds between sending updates
+local updateInterval = 1           -- Time in seconds between sending updates (changed from 20 to 1)
 
 -- Open the wireless modem for rednet communication
 if modemSide then
@@ -120,6 +120,7 @@ local function sendPanelData()
         print(string.format("Delta Time: %d seconds", deltaTime))
 
         if deltaTime > 0 then
+            -- Calculate energy usage per tick
             energyUsage = deltaEnergy / (deltaTime * 20)  -- EU per tick
             print(string.format("Energy Usage: %.2f EU/t", energyUsage))
         else
@@ -170,5 +171,5 @@ end
 -- Main loop to send data at intervals
 while true do
     sendPanelData()
-    sleep(updateInterval)  -- Wait for the next update
+    sleep(updateInterval)  -- Wait for the next update (1 second)
 end
