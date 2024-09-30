@@ -3,7 +3,7 @@
 -- Configuration
 local panelSide = "bottom"         -- Side where the advanced information panel is connected
 print("Panel Side:", panelSide)    -- Debugging line
-local mainframeID = 4644           -- Mainframe's Rednet ID
+local mainframeID = 4644           -- Mainframe's Rednet ID (Replace with your actual mainframe ID)
 local modemSide = "left"           -- Side where the modem is connected
 local updateInterval = 1           -- Time in seconds between sending updates
 
