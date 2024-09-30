@@ -23,11 +23,18 @@ local previousTime = nil
 -- Function to extract energy data from getCardData
 local function extractEnergy(dataLine)
     print("Parsing Energy Line:", dataLine)
-    local energyStr = dataLine:match("([%d%s]+)%s*EU")
+    -- Extract the numeric part before 'EU', remove spaces and commas
+    local energyStr = dataLine:match("([%d%s,]+)%s*EU")
     if energyStr then
-        local energyValue = tonumber((energyStr:gsub("%s", "")))
-        print("Extracted Energy:", energyValue)
-        return energyValue
+        energyStr = energyStr:gsub("[%s,]", "")  -- Remove spaces and commas
+        local energyValue = tonumber(energyStr)
+        if energyValue then
+            print("Extracted Energy:", energyValue)
+            return energyValue
+        else
+            print("Failed to convert energy string to number:", energyStr)
+            return nil
+        end
     else
         print("Failed to extract energy from line:", dataLine)
         return nil
@@ -107,13 +114,20 @@ local function sendPanelData()
         local deltaEnergy = previousEnergy - storedEnergy  -- Energy used
         local deltaTime = currentTime - previousTime       -- Time elapsed in seconds
 
+        print(string.format("Previous Energy: %d EU", previousEnergy))
+        print(string.format("Current Energy: %d EU", storedEnergy))
+        print(string.format("Delta Energy: %d EU", deltaEnergy))
+        print(string.format("Delta Time: %d seconds", deltaTime))
+
         if deltaTime > 0 then
-            energyUsage = deltaEnergy / deltaTime  -- EU per second
-            print(string.format("Energy Usage: %.2f EU/s", energyUsage))
+            energyUsage = deltaEnergy / (deltaTime * 20)  -- EU per tick
+            print(string.format("Energy Usage: %.2f EU/t", energyUsage))
         else
             energyUsage = 0
             print("Delta time is zero or negative. Setting energy usage to 0.")
         end
+    else
+        print("No previous energy data. Skipping energy usage calculation.")
     end
 
     -- Update previous readings
@@ -137,7 +151,7 @@ local function sendPanelData()
         rednet.send(mainframeID, message, "panel_data")
 
         -- Debug print to confirm message sent
-        print(string.format("Sent panel data to mainframe: %s - Energy Usage: %.2f EU/s - Filled: %d%%", panelName, energyUsage, fillPercentage))
+        print(string.format("Sent panel data to mainframe: %s - Energy Usage: %.2f EU/t - Filled: %d%%", panelName, energyUsage, fillPercentage))
     else
         print("Waiting for next reading to calculate energy usage...")
     end
