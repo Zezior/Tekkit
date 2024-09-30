@@ -5,7 +5,7 @@ local panelSide = "bottom"         -- Side where the advanced information panel 
 print("Panel Side:", panelSide)    -- Debugging line
 local mainframeID = 4644           -- Mainframe's Rednet ID
 local modemSide = "left"           -- Side where the modem is connected
-local updateInterval = 1          -- Time in seconds between sending updates
+local updateInterval = 20          -- Time in seconds between sending updates
 
 -- Open the wireless modem for rednet communication
 if modemSide then
@@ -108,10 +108,8 @@ local function sendPanelData()
         local deltaTime = currentTime - previousTime       -- Time elapsed in seconds
 
         if deltaTime > 0 then
-            local energyUsagePerSecond = deltaEnergy / deltaTime  -- EU per second
-            local energyUsagePerTick = energyUsagePerSecond / 20  -- EU per tick
-            energyUsage = energyUsagePerTick
-            print(string.format("Energy Usage: %.2f EU/T", energyUsage))
+            energyUsage = deltaEnergy / deltaTime  -- EU per second
+            print(string.format("Energy Usage: %.2f EU/s", energyUsage))
         else
             energyUsage = 0
             print("Delta time is zero or negative. Setting energy usage to 0.")
@@ -139,7 +137,7 @@ local function sendPanelData()
         rednet.send(mainframeID, message, "panel_data")
 
         -- Debug print to confirm message sent
-        print(string.format("Sent panel data to mainframe: %s - Energy Usage: %.2f EU/T - Filled: %d%%", panelName, energyUsage, fillPercentage))
+        print(string.format("Sent panel data to mainframe: %s - Energy Usage: %.2f EU/s - Filled: %d%%", panelName, energyUsage, fillPercentage))
     else
         print("Waiting for next reading to calculate energy usage...")
     end
