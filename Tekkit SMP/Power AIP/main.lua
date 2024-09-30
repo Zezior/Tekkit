@@ -1,7 +1,7 @@
 -- aip_script.lua
 
 -- Configuration
-local panelSide = "Bottom"         -- Side where the advanced information panel is connected
+local panelSide = "bottom"         -- Side where the advanced information panel is connected
 local mainframeID = 4644        -- Mainframe's Rednet ID
 local modemSide = "left"        -- Side where the modem is connected
 local updateInterval = 15       -- Time in seconds between sending updates
