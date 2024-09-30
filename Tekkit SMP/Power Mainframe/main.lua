@@ -5,18 +5,34 @@ local monitorSide = "right"     -- Adjust based on your setup
 local modemSide = "top"         -- Adjust based on your setup
 
 -- Open the modem on the specified side
-rednet.open(modemSide)
+if peripheral.isPresent(modemSide) then
+    rednet.open(modemSide)
+    print("Rednet modem opened on side:", modemSide)
+else
+    print("Error: No modem found on side:", modemSide)
+    return
+end
 
 -- Output the computer ID
 print("Mainframe Computer ID:", os.getComputerID())
 
 -- Load allowed sender IDs from ids.lua
-local ids = require("ids")
+local status, ids = pcall(require, "ids")
+if not status then
+    print("Error loading ids.lua:", ids)
+    return
+end
+
 local reactorMainframeID = ids.reactorMainframeID
 local allowedSenderIDs = ids.allowedSenderIDs
 
 -- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
+if not monitor then
+    print("Error: No monitor found on side:", monitorSide)
+    return
+end
+
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
 
 -- Set custom background color
@@ -27,6 +43,7 @@ monitor.setPaletteColor(bgColor, 18 / 255, 53 / 255, 36 / 255)  -- RGB values fo
 monitor.setBackgroundColor(bgColor)
 monitor.clear()
 
+-- Button and UI Variables
 local buttonList = {}  -- Store buttons for click detection
 local w, h = monitor.getSize() -- Get the monitor's width and height
 local page = "home"  -- Start on Home Page
@@ -59,12 +76,15 @@ local timeToFullCharge = nil   -- Time in seconds until full charge
 -- Variable to track refresh countdown
 local refreshCountdown = refreshInterval
 
+-- Flag to indicate if display needs refresh
+local displayNeedsRefresh = false
+
 -- Function to format EU values
 local function formatEU(value)
     if value >= 1e12 then
         return string.format("%.2f T EU", value / 1e12)
     elseif value >= 1e9 then
-        return string.format("%.2f Bil", value / 1e9)  -- Changed from G EU to Bil
+        return string.format("%.2f Bil", value / 1e9)  -- Bil for billion
     elseif value >= 1e6 then
         return string.format("%.2f M EU", value / 1e6)
     elseif value >= 1e3 then
@@ -79,7 +99,7 @@ local function formatEUt(value)
     if value >= 1e12 then
         return string.format("%.2f T EU/t", value / 1e12)
     elseif value >= 1e9 then
-        return string.format("%.2f Bil/t", value / 1e9)  -- Changed from G EU/t to Bil/t
+        return string.format("%.2f Bil/t", value / 1e9)  -- Bil for billion
     elseif value >= 1e6 then
         return string.format("%.2f M EU/t", value / 1e6)
     elseif value >= 1e3 then
@@ -249,7 +269,7 @@ local function processPESUData()
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
                 totalStored = totalStored + pesuData.energy  -- Stored EU
-                totalCapacity = totalCapacity + 1000000000  -- Fixed capacity 1,000,000,000
+                totalCapacity = totalCapacity + 1000000000  -- Fixed capacity 1,000,000,000 EU
                 table.insert(pesuList, {
                     stored = pesuData.energy,
                     capacity = 1000000000  -- Fixed capacity
@@ -308,7 +328,7 @@ function displayPESUPage(pesuData)
     end
 
     for idx, data in ipairs(pesuData) do
-        local globalIdx = (currentPesuPage - 1) * pesusPerColumn * columnsPerPage + idx
+        local globalIdx = (currentPesuPage - 1) * pesusPerPage * columnsPerPage + idx
         local column = math.ceil(idx / pesusPerColumn)
         if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
@@ -412,7 +432,8 @@ local function displayHomePage()
             monitor.write(panelData.title)
             panelY = panelY + 1
 
-            local usageText = string.format("Power Usage: %.2f EU/T", panelData.energyUsage)
+            -- Use formatEUt to format energyUsage
+            local usageText = "Power Usage: " .. formatEUt(panelData.energyUsage)
             monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
             monitor.write(usageText)
             panelY = panelY + 1
@@ -571,6 +592,8 @@ local function handleIncomingData()
                     calculateTimeToFullCharge()
                     displayNeedsRefresh = true
                 end
+            else
+                print("Received message from unauthorized sender ID:", senderID)
             end
         end
     end
@@ -598,6 +621,27 @@ local function handleButtonPresses()
     end
 end
 
+-- Function to update the display based on current page
+local function updateDisplay()
+    if displayNeedsRefresh then
+        centerButtons()
+        if page == "home" then
+            displayHomePage()
+        elseif page == "pesu" then
+            displayPESUPage(pagesData[currentPesuPage] or {})
+        end
+        displayNeedsRefresh = false
+    end
+end
+
+-- Function to refresh the monitor display
+local function displayLoop()
+    while true do
+        updateDisplay()
+        sleep(0.1)
+    end
+end
+
 -- Main function
 local function main()
     page = "home"  -- Ensure the page is set to "home" on start
@@ -611,32 +655,12 @@ local function main()
     displayNeedsRefresh = true  -- Flag to indicate display needs refresh
 
     -- Start data processing and page refreshing in parallel
-    parallel.waitForAny(
-        function()  -- PESU Data Processing Loop
-            while true do
-                processPESUData()
-                displayNeedsRefresh = true
-                sleep(refreshInterval)
-            end
-        end,
-        function()  -- UI Loop for Live Page Updates
-            while true do
-                if displayNeedsRefresh then
-                    centerButtons()
-                    if page == "home" then
-                        displayHomePage()
-                    elseif page == "pesu" then
-                        displayPESUPage(pagesData[currentPesuPage] or {})
-                    end
-                    displayNeedsRefresh = false
-                end
-                sleep(0.05)
-            end
-        end,
-        handleButtonPresses,
+    parallel.waitForAll(
         handleIncomingData,
         monitorPESU,
-        periodicUpdater
+        periodicUpdater,
+        handleButtonPresses,
+        displayLoop
     )
 end
 
