@@ -430,9 +430,9 @@ local function displayHomePage()
         end
 
         -- Format totalEnergyUsage using formatEUt
-        local usageText = "Power Usage: " .. formatEUt(totalEnergyUsage)
-        monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
-        monitor.write(usageText)
+        local deltaEnergyText = "Delta Energy: " .. formatEUt(totalEnergyUsage)
+        monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #deltaEnergyText) / 2), panelY)
+        monitor.write(deltaEnergyText)
         panelY = panelY + 1
 
         for senderID, panelData in pairs(panelDataList) do
