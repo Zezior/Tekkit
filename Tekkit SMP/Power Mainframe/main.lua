@@ -76,6 +76,15 @@ local timeToFullCharge = nil   -- Time in seconds until full charge
 -- Flag to indicate if display needs refresh
 local displayNeedsRefresh = false
 
+-- Helper function to safely retrieve a field from a table
+local function safeGet(table, key, default)
+    if table and table[key] ~= nil then
+        return table[key]
+    else
+        return default
+    end
+end
+
 -- Function to format EU values
 local function formatEU(value)
     if value >= 1e12 then
@@ -325,7 +334,7 @@ function displayPESUPage(pesuData)
     end
 
     for idx, data in ipairs(pesuData) do
-        local globalIdx = (currentPesuPage - 1) * pesusPerPage * columnsPerPage + idx
+        local globalIdx = (currentPesuPage - 1) * pesusPerPage + idx
         local column = math.ceil(idx / pesusPerColumn)
         if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
@@ -423,251 +432,292 @@ local function displayHomePage()
         monitor.setCursorPos(msgX, panelY)
         monitor.write(msg)
     else
-        -- Aggregate energyUsage from all panels
+        -- Aggregate energyUsage from all panels with validation
         local totalEnergyUsage = 0
+        local validPanels = 0  -- Counter for panels with valid energyUsage
+
         for senderID, panelData in pairs(panelDataList) do
-            totalEnergyUsage = totalEnergyUsage + panelData.energyUsage
+            local energyUsage = safeGet(panelData, "energyUsage", nil)
+            if energyUsage and type(energyUsage) == "number" then
+                totalEnergyUsage = totalEnergyUsage + energyUsage
+                validPanels = validPanels + 1
+            else
+                print("Warning: Missing or invalid 'energyUsage' from sender ID:", senderID)
+            end
         end
 
-        -- Format totalEnergyUsage using formatEUt
-        local deltaEnergyText = "Delta Energy: " .. formatEUt(totalEnergyUsage)
-        monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #deltaEnergyText) / 2), panelY)
-        monitor.write(deltaEnergyText)
-        panelY = panelY + 1
+        if validPanels > 0 then
+            -- Format totalEnergyUsage using formatEUt
+            local deltaEnergyText = "Delta Energy: " .. formatEUt(totalEnergyUsage)
+            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #deltaEnergyText) / 2), panelY)
+            monitor.write(deltaEnergyText)
+            panelY = panelY + 1
+        else
+            -- No valid energyUsage data received
+            local unloadedText = "Delta Energy: Chunk Unloaded"
+            monitor.setTextColor(colors.red)
+            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #unloadedText) / 2), panelY)
+            monitor.write(unloadedText)
+            monitor.setTextColor(colors.white)
+            panelY = panelY + 1
+        end
 
         for senderID, panelData in pairs(panelDataList) do
-            local fillText = "Filled: " .. string.format("%.2f%%", panelData.fillPercentage)
-            setColorBasedOnPercentage(panelData.fillPercentage)
-            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
-            monitor.write(fillText)
-            panelY = panelY + 2  -- Add extra space between panels
+            local fillPercentage = safeGet(panelData, "fillPercentage", nil)
+            if fillPercentage and type(fillPercentage) == "number" then
+                local fillText = "Filled: " .. string.format("%.2f%%", fillPercentage)
+                setColorBasedOnPercentage(fillPercentage)
+                monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
+                monitor.write(fillText)
+                panelY = panelY + 2  -- Add extra space between panels
+            else
+                print("Warning: Missing or invalid 'fillPercentage' from sender ID:", senderID)
+            end
         end
         monitor.setTextColor(colors.white)
     end
 
-    -- Display reactor status above progress bar
-    local reactorStatusY = h - 12
-    if reactorsAreOn then
-        monitor.setTextColor(colors.green)
-        centerText("Reactors are ON", reactorStatusY)
-    else
-        monitor.setTextColor(colors.red)
-        centerText("Reactors are OFF", reactorStatusY)
-    end
-    monitor.setTextColor(colors.white)
-
-    -- Display time to full charge
-    local timeToFullChargeText = ""
-    if timeToFullCharge and timeToFullCharge > 0 then
-        local hours = math.floor(timeToFullCharge / 3600)
-        local minutes = math.floor((timeToFullCharge % 3600) / 60)
-        local seconds = math.floor(timeToFullCharge % 60)
-        if hours > 0 then
-            timeToFullChargeText = string.format("Power fully charged in: %dh %dm %ds", hours, minutes, seconds)
-        elseif minutes > 0 then
-            timeToFullChargeText = string.format("Power fully charged in: %dm %ds", minutes, seconds)
+    -- Function to display reactor status above progress bar
+    local function displayReactorStatus()
+        local reactorStatusY = h - 12
+        if reactorsAreOn then
+            monitor.setTextColor(colors.green)
+            centerText("Reactors are ON", reactorStatusY)
         else
-            timeToFullChargeText = string.format("Power fully charged in: %ds", seconds)
+            monitor.setTextColor(colors.red)
+            centerText("Reactors are OFF", reactorStatusY)
         end
-    else
-        timeToFullChargeText = "Power fully charged in: N/A"
+        monitor.setTextColor(colors.white)
     end
-    -- Center the timeToFullChargeText
-    centerText(timeToFullChargeText, reactorStatusY + 1)
 
-    -- Display total power capacity
-    local capacityY = reactorStatusY + 2
-    monitor.setTextColor(colors.white)
-    local capacityText = string.format("Total Power Capacity: %s / %s", formatEU(totalStored), formatEU(totalCapacity))
-    -- Center the capacityText
-    centerText(capacityText, capacityY)
-
-    -- Display total fill percentage as a progress bar, centered above buttons
-    local totalFillPercentage = 0
-    if totalCapacity > 0 then
-        totalFillPercentage = (totalStored / totalCapacity) * 100
-    end
-    local progressBarWidth = w - 4  -- Leave some padding on sides
-    local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
-
-    local progressBarY = h - 7
-
-    -- Draw progress bar border
-    monitor.setCursorPos(3, progressBarY)
-    monitor.setBackgroundColor(colors.black)
-    monitor.write(string.rep(" ", progressBarWidth))  -- Top border
-
-    monitor.setCursorPos(3, progressBarY + 1)
-    monitor.write(" ")  -- Left border
-    monitor.setCursorPos(2 + progressBarWidth, progressBarY + 1)
-    monitor.write(" ")  -- Right border
-
-    monitor.setCursorPos(3, progressBarY + 2)
-    monitor.write(string.rep(" ", progressBarWidth))  -- Bottom border
-
-    -- Draw filled portion
-    setColorBasedOnPercentage(totalFillPercentage)
-    monitor.setBackgroundColor(colors.black)
-    monitor.setCursorPos(4, progressBarY + 1)
-    monitor.write(string.rep(" ", progressBarWidth - 2))  -- Clear inside
-
-    monitor.setBackgroundColor(monitor.getTextColor())
-    monitor.setCursorPos(4, progressBarY + 1)
-    monitor.write(string.rep(" ", filledBars))
-
-    -- Write percentage over the progress bar
-    monitor.setBackgroundColor(colors.black)  -- Set background to black for percentage text
-    monitor.setTextColor(colors.white)
-    local percentageText = formatPercentage(totalFillPercentage)
-    local percentageX = math.floor((w - #percentageText) / 2) + 1
-    monitor.setCursorPos(percentageX, progressBarY + 1)
-    monitor.write(percentageText)
-
-    monitor.setBackgroundColor(bgColor)
-    monitor.setTextColor(colors.white)
-end
-
--- Function to send commands to reactor mainframe
-local function sendCommand(command)
-    rednet.send(reactorMainframeID, {command = command}, "reactor_control")
-end
-
--- Function to request reactor data
-local function requestReactorData()
-    rednet.send(reactorMainframeID, {command = "request_reactor_status"}, "reactor_control")
-    rednet.send(reactorMainframeID, {command = "request_total_eu_output"}, "reactor_control")
-end
-
--- Function to monitor PESU levels and control reactors
-local function monitorPESU()
-    while true do
-        -- Calculate fill percentages
-        local anyPESUBelowThreshold = false
-        local allPESUAtFull = true
-
-        for _, pesu in ipairs(pesuList) do
-            local fillPercentage = (pesu.stored / pesu.capacity) * 100
-            if fillPercentage <= 0.01 then
-                anyPESUBelowThreshold = true
-            end
-            if fillPercentage < 100 then
-                allPESUAtFull = false
-            end
-        end
-
-        if anyPESUBelowThreshold and lastSentState ~= "turn_on_reactors" then
-            sendCommand("turn_on_reactors")
-            lastSentState = "turn_on_reactors"
-            print("Sent command to turn ON reactors.")
-        elseif allPESUAtFull and lastSentState ~= "turn_off_reactors" then
-            sendCommand("turn_off_reactors")
-            lastSentState = "turn_off_reactors"
-            print("Sent command to turn OFF reactors.")
-        end
-
-        sleep(5)  -- Adjust sleep time as needed
-    end
-end
-
--- Function to handle incoming data
-local function handleIncomingData()
-    while true do
-        local event, senderID, message, protocol = os.pullEvent("rednet_message")
-        if type(message) == "table" and message.command then
-            if table.contains(allowedSenderIDs, senderID) or senderID == reactorMainframeID then
-                if message.command == "pesu_data" then
-                    pesuDataFromSenders[senderID] = message
-                    processPESUData()
-                    print("Received PESU data from sender ID:", senderID)
-                    displayNeedsRefresh = true
-                elseif message.command == "panel_data" then
-                    panelDataList[senderID] = message.panelDataList[1]
-                    print("Received panel data from sender ID:", senderID)
-                    displayNeedsRefresh = true
-                elseif message.command == "reactor_status" then
-                    reactorsStatus = message.status  -- "on" or "off"
-                    reactorsAreOn = (message.status == "on")
-                    calculateTimeToFullCharge()
-                    print("Received reactor status:", reactorsStatus)
-                    displayNeedsRefresh = true
-                elseif message.command == "total_eu_output" and message.totalEUOutput then
-                    totalEUOutput = message.totalEUOutput
-                    calculateTimeToFullCharge()
-                    print("Received total EU/t output:", totalEUOutput)
-                    displayNeedsRefresh = true
-                end
+    -- Function to display time to full charge
+    local function displayTimeToFullCharge()
+        local reactorStatusY = h - 12
+        local timeToFullChargeText = ""
+        if timeToFullCharge and timeToFullCharge > 0 then
+            local hours = math.floor(timeToFullCharge / 3600)
+            local minutes = math.floor((timeToFullCharge % 3600) / 60)
+            local seconds = math.floor(timeToFullCharge % 60)
+            if hours > 0 then
+                timeToFullChargeText = string.format("Power fully charged in: %dh %dm %ds", hours, minutes, seconds)
+            elseif minutes > 0 then
+                timeToFullChargeText = string.format("Power fully charged in: %dm %ds", minutes, seconds)
             else
-                print("Received message from unauthorized sender ID:", senderID)
+                timeToFullChargeText = string.format("Power fully charged in: %ds", seconds)
+            end
+        else
+            timeToFullChargeText = "Power fully charged in: N/A"
+        end
+        -- Center the timeToFullChargeText
+        centerText(timeToFullChargeText, reactorStatusY + 1)
+    end
+
+    -- Function to display total power capacity
+    local function displayTotalPowerCapacity()
+        local reactorStatusY = h - 12
+        local capacityY = reactorStatusY + 2
+        monitor.setTextColor(colors.white)
+        local capacityText = string.format("Total Power Capacity: %s / %s", formatEU(totalStored), formatEU(totalCapacity))
+        -- Center the capacityText
+        centerText(capacityText, capacityY)
+    end
+
+    -- Function to display total fill percentage as a progress bar, centered above buttons
+    local function displayProgressBar()
+        local totalFillPercentage = 0
+        if totalCapacity > 0 then
+            totalFillPercentage = (totalStored / totalCapacity) * 100
+        end
+        local progressBarWidth = w - 4  -- Leave some padding on sides
+        local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
+
+        local progressBarY = h - 7
+
+        -- Draw progress bar border
+        monitor.setCursorPos(3, progressBarY)
+        monitor.setBackgroundColor(colors.black)
+        monitor.write(string.rep(" ", progressBarWidth))  -- Top border
+
+        monitor.setCursorPos(3, progressBarY + 1)
+        monitor.write(" ")  -- Left border
+        monitor.setCursorPos(2 + progressBarWidth, progressBarY + 1)
+        monitor.write(" ")  -- Right border
+
+        monitor.setCursorPos(3, progressBarY + 2)
+        monitor.write(string.rep(" ", progressBarWidth))  -- Bottom border
+
+        -- Draw filled portion
+        setColorBasedOnPercentage(totalFillPercentage)
+        monitor.setBackgroundColor(monitor.getTextColor())
+        monitor.setCursorPos(4, progressBarY + 1)
+        monitor.write(string.rep(" ", filledBars))
+
+        -- Write percentage over the progress bar
+        monitor.setBackgroundColor(colors.black)  -- Set background to black for percentage text
+        monitor.setTextColor(colors.white)
+        local percentageText = formatPercentage(totalFillPercentage)
+        local percentageX = math.floor((w - #percentageText) / 2) + 1
+        monitor.setCursorPos(percentageX, progressBarY + 1)
+        monitor.write(percentageText)
+
+        monitor.setBackgroundColor(bgColor)
+        monitor.setTextColor(colors.white)
+    end
+
+    -- Function to display all additional info
+    local function displayAdditionalInfo()
+        displayReactorStatus()
+        displayTimeToFullCharge()
+        displayTotalPowerCapacity()
+        displayProgressBar()
+    end
+
+    -- Function to send commands to reactor mainframe
+    local function sendCommand(command)
+        rednet.send(reactorMainframeID, {command = command}, "reactor_control")
+    end
+
+    -- Function to request reactor data
+    local function requestReactorData()
+        rednet.send(reactorMainframeID, {command = "request_reactor_status"}, "reactor_control")
+        rednet.send(reactorMainframeID, {command = "request_total_eu_output"}, "reactor_control")
+    end
+
+    -- Function to monitor PESU levels and control reactors
+    local function monitorPESU()
+        while true do
+            -- Calculate fill percentages
+            local anyPESUBelowThreshold = false
+            local allPESUAtFull = true
+
+            for _, pesu in ipairs(pesuList) do
+                local fillPercentage = (pesu.stored / pesu.capacity) * 100
+                if fillPercentage <= 0.01 then
+                    anyPESUBelowThreshold = true
+                end
+                if fillPercentage < 100 then
+                    allPESUAtFull = false
+                end
+            end
+
+            if anyPESUBelowThreshold and lastSentState ~= "turn_on_reactors" then
+                sendCommand("turn_on_reactors")
+                lastSentState = "turn_on_reactors"
+                print("Sent command to turn ON reactors.")
+            elseif allPESUAtFull and lastSentState ~= "turn_off_reactors" then
+                sendCommand("turn_off_reactors")
+                lastSentState = "turn_off_reactors"
+                print("Sent command to turn OFF reactors.")
+            end
+
+            sleep(5)  -- Adjust sleep time as needed
+        end
+    end
+
+    -- Function to handle incoming data
+    local function handleIncomingData()
+        while true do
+            local event, senderID, message, protocol = os.pullEvent("rednet_message")
+            if type(message) == "table" and message.command then
+                if table.contains(allowedSenderIDs, senderID) or senderID == reactorMainframeID then
+                    if message.command == "pesu_data" then
+                        pesuDataFromSenders[senderID] = message
+                        processPESUData()
+                        print("Received PESU data from sender ID:", senderID)
+                        displayNeedsRefresh = true
+                    elseif message.command == "panel_data" then
+                        panelDataList[senderID] = message.panelDataList[1]
+                        -- Log received panel data for debugging
+                        print("Received panel data from sender ID:", senderID)
+                        for key, value in pairs(panelDataList[senderID]) do
+                            print("  " .. key .. ": " .. tostring(value))
+                        end
+                        displayNeedsRefresh = true
+                    elseif message.command == "reactor_status" then
+                        reactorsStatus = message.status  -- "on" or "off"
+                        reactorsAreOn = (message.status == "on")
+                        calculateTimeToFullCharge()
+                        print("Received reactor status:", reactorsStatus)
+                        displayNeedsRefresh = true
+                    elseif message.command == "total_eu_output" and message.totalEUOutput then
+                        totalEUOutput = message.totalEUOutput
+                        calculateTimeToFullCharge()
+                        print("Received total EU/t output:", totalEUOutput)
+                        displayNeedsRefresh = true
+                    end
+                else
+                    print("Received message from unauthorized sender ID:", senderID)
+                end
             end
         end
     end
-end
 
--- Function to periodically request reactor data and refresh display
-local function periodicUpdater()
-    while true do
-        requestReactorData()
-        displayNeedsRefresh = true
-        sleep(refreshInterval)
-    end
-end
-
--- Function to handle button presses
-local function handleButtonPresses()
-    while true do
-        local event, side, x, y = os.pullEvent("monitor_touch")
-        local action = detectClick(event, side, x, y)
-        if action then
-            action()
-            print("Button pressed:", side, x, y)
+    -- Function to periodically request reactor data and refresh display
+    local function periodicUpdater()
+        while true do
+            requestReactorData()
             displayNeedsRefresh = true
+            sleep(refreshInterval)
         end
-        sleep(0.05)
     end
-end
 
--- Function to update the display based on current page
-local function updateDisplay()
-    if displayNeedsRefresh then
-        centerButtons()
-        if page == "home" then
-            displayHomePage()
-        elseif page == "pesu" then
-            displayPESUPage(pagesData[currentPesuPage] or {})
+    -- Function to handle button presses
+    local function handleButtonPresses()
+        while true do
+            local event, side, x, y = os.pullEvent("monitor_touch")
+            local action = detectClick(event, side, x, y)
+            if action then
+                action()
+                print("Button pressed:", side, x, y)
+                displayNeedsRefresh = true
+            end
+            sleep(0.05)
         end
-        displayNeedsRefresh = false
     end
-end
 
--- Function to refresh the monitor display
-local function displayLoop()
-    while true do
-        updateDisplay()
-        sleep(0.1)
+    -- Function to update the display based on current page
+    local function updateDisplay()
+        if displayNeedsRefresh then
+            centerButtons()
+            if page == "home" then
+                displayHomePage()
+            elseif page == "pesu" then
+                displayPESUPage(pagesData[currentPesuPage] or {})
+            end
+            displayAdditionalInfo()  -- Display additional info after main page
+            displayNeedsRefresh = false
+        end
     end
-end
 
--- Main function
-local function main()
-    page = "home"  -- Ensure the page is set to "home" on start
+    -- Function to refresh the monitor display
+    local function displayLoop()
+        while true do
+            updateDisplay()
+            sleep(0.1)
+        end
+    end
 
-    centerButtons()  -- Center the buttons at the start
+    -- Main function
+    local function main()
+        page = "home"  -- Ensure the page is set to "home" on start
 
-    -- Clear the monitor fully on startup
-    monitor.setBackgroundColor(bgColor)
-    monitor.clear()
+        centerButtons()  -- Center the buttons at the start
 
-    displayNeedsRefresh = true  -- Flag to indicate display needs refresh
+        -- Clear the monitor fully on startup
+        monitor.setBackgroundColor(bgColor)
+        monitor.clear()
 
-    -- Start data processing and page refreshing in parallel
-    parallel.waitForAll(
-        handleIncomingData,
-        monitorPESU,
-        periodicUpdater,
-        handleButtonPresses,
-        displayLoop
-    )
-end
+        displayNeedsRefresh = true  -- Flag to indicate display needs refresh
 
--- Start main function
-main()
+        -- Start data processing and page refreshing in parallel
+        parallel.waitForAll(
+            handleIncomingData,
+            monitorPESU,
+            periodicUpdater,
+            handleButtonPresses,
+            displayLoop
+        )
+    end
+
+    -- Start main function
+    main()
