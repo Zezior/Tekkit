@@ -4,7 +4,7 @@
 local monitorSide = "right"     -- Adjust based on your setup
 local modemSide = "top"         -- Adjust based on your setup
 
--- Open the modem on the specified side
+-- Open the modem on the specified side with error handling
 if peripheral.isPresent(modemSide) then
     rednet.open(modemSide)
     print("Rednet modem opened on side:", modemSide)
@@ -16,7 +16,7 @@ end
 -- Output the computer ID
 print("Mainframe Computer ID:", os.getComputerID())
 
--- Load allowed sender IDs from ids.lua
+-- Load allowed sender IDs from ids.lua with error handling
 local status, ids = pcall(require, "ids")
 if not status then
     print("Error loading ids.lua:", ids)
@@ -26,7 +26,7 @@ end
 local reactorMainframeID = ids.reactorMainframeID
 local allowedSenderIDs = ids.allowedSenderIDs
 
--- Variables for monitor and button handling
+-- Variables for monitor and UI handling
 local monitor = peripheral.wrap(monitorSide)
 if not monitor then
     print("Error: No monitor found on side:", monitorSide)
@@ -72,9 +72,6 @@ local reactorsAreOn = false  -- Track if reactors are on
 -- Variables to track reactor output and time to full charge
 local totalEUOutput = 0   -- Total EU/t output from reactors
 local timeToFullCharge = nil   -- Time in seconds until full charge
-
--- Variable to track refresh countdown
-local refreshCountdown = refreshInterval
 
 -- Flag to indicate if display needs refresh
 local displayNeedsRefresh = false
@@ -426,18 +423,19 @@ local function displayHomePage()
         monitor.setCursorPos(msgX, panelY)
         monitor.write(msg)
     else
+        -- Aggregate energyUsage from all panels
+        local totalEnergyUsage = 0
         for senderID, panelData in pairs(panelDataList) do
-            monitor.setTextColor(colors.white)
-            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #panelData.title) / 2), panelY)
-            monitor.write(panelData.title)
-            panelY = panelY + 1
+            totalEnergyUsage = totalEnergyUsage + panelData.energyUsage
+        end
 
-            -- Use formatEUt to format energyUsage
-            local usageText = "Power Usage: " .. formatEUt(panelData.energyUsage)
-            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
-            monitor.write(usageText)
-            panelY = panelY + 1
+        -- Format totalEnergyUsage using formatEUt
+        local usageText = "Power Usage: " .. formatEUt(totalEnergyUsage)
+        monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
+        monitor.write(usageText)
+        panelY = panelY + 1
 
+        for senderID, panelData in pairs(panelDataList) do
             local fillText = "Filled: " .. string.format("%.2f%%", panelData.fillPercentage)
             setColorBasedOnPercentage(panelData.fillPercentage)
             monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
@@ -465,14 +463,14 @@ local function displayHomePage()
         local minutes = math.floor((timeToFullCharge % 3600) / 60)
         local seconds = math.floor(timeToFullCharge % 60)
         if hours > 0 then
-            timeToFullChargeText = string.format("Power facility fully charged in: %dh %dm %ds", hours, minutes, seconds)
+            timeToFullChargeText = string.format("Power fully charged in: %dh %dm %ds", hours, minutes, seconds)
         elseif minutes > 0 then
-            timeToFullChargeText = string.format("Power facility fully charged in: %dm %ds", minutes, seconds)
+            timeToFullChargeText = string.format("Power fully charged in: %dm %ds", minutes, seconds)
         else
-            timeToFullChargeText = string.format("Power facility fully charged in: %ds", seconds)
+            timeToFullChargeText = string.format("Power fully charged in: %ds", seconds)
         end
     else
-        timeToFullChargeText = "Power facility fully charged in: N/A"
+        timeToFullChargeText = "Power fully charged in: N/A"
     end
     -- Center the timeToFullChargeText
     centerText(timeToFullChargeText, reactorStatusY + 1)
@@ -560,9 +558,11 @@ local function monitorPESU()
         if anyPESUBelowThreshold and lastSentState ~= "turn_on_reactors" then
             sendCommand("turn_on_reactors")
             lastSentState = "turn_on_reactors"
+            print("Sent command to turn ON reactors.")
         elseif allPESUAtFull and lastSentState ~= "turn_off_reactors" then
             sendCommand("turn_off_reactors")
             lastSentState = "turn_off_reactors"
+            print("Sent command to turn OFF reactors.")
         end
 
         sleep(5)  -- Adjust sleep time as needed
@@ -578,18 +578,22 @@ local function handleIncomingData()
                 if message.command == "pesu_data" then
                     pesuDataFromSenders[senderID] = message
                     processPESUData()
+                    print("Received PESU data from sender ID:", senderID)
                     displayNeedsRefresh = true
                 elseif message.command == "panel_data" then
                     panelDataList[senderID] = message.panelDataList[1]
+                    print("Received panel data from sender ID:", senderID)
                     displayNeedsRefresh = true
                 elseif message.command == "reactor_status" then
                     reactorsStatus = message.status  -- "on" or "off"
                     reactorsAreOn = (message.status == "on")
                     calculateTimeToFullCharge()
+                    print("Received reactor status:", reactorsStatus)
                     displayNeedsRefresh = true
                 elseif message.command == "total_eu_output" and message.totalEUOutput then
                     totalEUOutput = message.totalEUOutput
                     calculateTimeToFullCharge()
+                    print("Received total EU/t output:", totalEUOutput)
                     displayNeedsRefresh = true
                 end
             else
@@ -615,6 +619,7 @@ local function handleButtonPresses()
         local action = detectClick(event, side, x, y)
         if action then
             action()
+            print("Button pressed:", side, x, y)
             displayNeedsRefresh = true
         end
         sleep(0.05)
