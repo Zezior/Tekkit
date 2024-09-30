@@ -302,7 +302,7 @@ local function processPESUData()
 end
 
 -- Function to display the PESU Page
-function displayPESUPage(pesuData)
+local function displayPESUPage(pesuData)
     clearMonitorExceptButtons()
 
     -- Adjusted positions
@@ -631,4 +631,3 @@ local function displayHomePage()
 
     -- Start main function
     main()
-end
