@@ -5,7 +5,7 @@ local panelSide = "bottom"         -- Side where the advanced information panel 
 print("Panel Side:", panelSide)    -- Debugging line
 local mainframeID = 4644           -- Mainframe's Rednet ID
 local modemSide = "left"           -- Side where the modem is connected
-local updateInterval = 1           -- Time in seconds between sending updates (changed from 20 to 1)
+local updateInterval = 1           -- Time in seconds between sending updates
 
 -- Open the wireless modem for rednet communication
 if modemSide then
@@ -17,8 +17,8 @@ else
 end
 
 -- Variables to store energy readings
-local previousEnergy = nil
-local previousTime = nil
+local energyHistory = {}  -- Stores {time, energy} tuples
+local calculationInterval = 20  -- Calculate energy usage over 20 seconds
 
 -- Function to extract energy data from getCardData
 local function extractEnergy(dataLine)
@@ -105,38 +105,36 @@ local function sendPanelData()
         return
     end
 
-    -- Calculate energy usage
-    local currentTime = os.time()  -- Changed from os.clock() to os.time()
+    -- Get current time
+    local currentTime = os.time()
 
-    local energyUsage = nil
+    -- Append current reading to energyHistory
+    table.insert(energyHistory, {time = currentTime, energy = storedEnergy})
 
-    if previousEnergy and previousTime then
-        local deltaEnergy = previousEnergy - storedEnergy  -- Energy used
-        local deltaTime = currentTime - previousTime       -- Time elapsed in seconds
-
-        print(string.format("Previous Energy: %d EU", previousEnergy))
-        print(string.format("Current Energy: %d EU", storedEnergy))
-        print(string.format("Delta Energy: %d EU", deltaEnergy))
-        print(string.format("Delta Time: %d seconds", deltaTime))
-
-        if deltaTime > 0 then
-            -- Calculate energy usage per tick
-            energyUsage = deltaEnergy / (deltaTime * 20)  -- EU per tick
-            print(string.format("Energy Usage: %.2f EU/t", energyUsage))
-        else
-            energyUsage = 0
-            print("Delta time is zero or negative. Setting energy usage to 0.")
-        end
-    else
-        print("No previous energy data. Skipping energy usage calculation.")
+    -- Remove readings older than calculationInterval seconds
+    while #energyHistory > 0 and (currentTime - energyHistory[1].time) > calculationInterval do
+        table.remove(energyHistory, 1)
     end
 
-    -- Update previous readings
-    previousEnergy = storedEnergy
-    previousTime = currentTime
+    -- Ensure we have data over the calculationInterval
+    if #energyHistory < 2 then
+        print("Not enough data to calculate energy usage. Need 20 seconds of data.")
+        return
+    end
 
-    -- Prepare the message to send
-    if energyUsage then
+    -- Find the earliest reading within the calculationInterval
+    local earliestReading = energyHistory[1]
+    local deltaEnergy = earliestReading.energy - storedEnergy  -- Energy used
+    local deltaTime = currentTime - earliestReading.time   -- Time elapsed in seconds
+
+    print(string.format("Delta Energy: %d EU over Delta Time: %d seconds", deltaEnergy, deltaTime))
+
+    if deltaTime > 0 then
+        -- Calculate energy usage per tick
+        local energyUsage = deltaEnergy / (deltaTime * 20)  -- EU per tick
+        print(string.format("Energy Usage: %.2f EU/t", energyUsage))
+
+        -- Prepare the message to send
         local message = {
             command = "panel_data",
             panelDataList = {
@@ -154,7 +152,7 @@ local function sendPanelData()
         -- Debug print to confirm message sent
         print(string.format("Sent panel data to mainframe: %s - Energy Usage: %.2f EU/t - Filled: %d%%", panelName, energyUsage, fillPercentage))
     else
-        print("Waiting for next reading to calculate energy usage...")
+        print("Delta time is zero or negative. Setting energy usage to 0.")
     end
 end
 
