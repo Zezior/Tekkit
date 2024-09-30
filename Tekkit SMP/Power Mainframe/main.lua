@@ -474,7 +474,7 @@ local function displayHomePage()
         end
     end
 
-    -- Display reactor status above progress bar
+    -- Function to display reactor status above progress bar
     local function displayReactorStatus()
         local reactorStatusY = h - 12
         if reactorsAreOn then
@@ -487,7 +487,7 @@ local function displayHomePage()
         monitor.setTextColor(colors.white)
     end
 
-    -- Display time to full charge
+    -- Function to display time to full charge
     local function displayTimeToFullCharge()
         local reactorStatusY = h - 12
         local timeToFullChargeText = ""
@@ -509,7 +509,7 @@ local function displayHomePage()
         centerText(timeToFullChargeText, reactorStatusY + 1)
     end
 
-    -- Display total power capacity
+    -- Function to display total power capacity
     local function displayTotalPowerCapacity()
         local reactorStatusY = h - 12
         local capacityY = reactorStatusY + 2
@@ -519,7 +519,7 @@ local function displayHomePage()
         centerText(capacityText, capacityY)
     end
 
-    -- Display total fill percentage as a progress bar, centered above buttons
+    -- Function to display total fill percentage as a progress bar, centered above buttons
     local function displayProgressBar()
         local totalFillPercentage = 0
         if totalCapacity > 0 then
