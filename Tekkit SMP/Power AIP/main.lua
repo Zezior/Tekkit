@@ -18,7 +18,7 @@ end
 
 -- Variables to store energy readings
 local energyHistory = {}  -- Stores {time, energy} tuples
-local calculationInterval = 20  -- Calculate energy usage over 20 seconds
+local calculationInterval = 1  -- Calculate energy usage over 1 second
 
 -- Function to extract energy data from getCardData
 local function extractEnergy(dataLine)
@@ -118,21 +118,27 @@ local function sendPanelData()
 
     -- Ensure we have data over the calculationInterval
     if #energyHistory < 2 then
-        print("Not enough data to calculate energy usage. Need 20 seconds of data.")
+        print("Not enough data to calculate energy usage. Need 1 second of data.")
         return
     end
 
     -- Find the earliest reading within the calculationInterval
     local earliestReading = energyHistory[1]
-    local deltaEnergy = earliestReading.energy - storedEnergy  -- Total energy used
+    local deltaEnergy_total = earliestReading.energy - storedEnergy  -- Total energy used over interval
     local deltaTime = currentTime - earliestReading.time   -- Time elapsed in seconds
 
-    print(string.format("Delta Energy: %d EU over Delta Time: %d seconds", deltaEnergy, deltaTime))
+    print(string.format("Delta Energy (Total): %d EU over Delta Time: %d seconds", deltaEnergy_total, deltaTime))
 
     if deltaTime > 0 then
-        -- No per-tick calculation; send total deltaEnergy
-        local energyUsed = deltaEnergy  -- Total energy used in the interval
-        print(string.format("Total Energy Used: %d EU", energyUsed))
+        -- Calculate energy usage per tick
+        local deltaEnergy = deltaEnergy_total / (deltaTime * 20)  -- EU per tick
+        print(string.format("Delta Energy (EU/t): %.2f EU/t", deltaEnergy))
+
+        -- Ensure deltaEnergy is non-negative
+        if deltaEnergy < 0 then
+            print("Warning: Negative delta energy detected. Setting to 0.")
+            deltaEnergy = 0
+        end
 
         -- Prepare the message to send
         local message = {
@@ -141,7 +147,7 @@ local function sendPanelData()
                 {
                     title = panelName,
                     fillPercentage = fillPercentage,
-                    deltaEnergy = energyUsed  -- Changed from energyUsage to deltaEnergy
+                    deltaEnergy = deltaEnergy  -- EU per tick
                 }
             }
         }
@@ -150,7 +156,7 @@ local function sendPanelData()
         rednet.send(mainframeID, message, "panel_data")
 
         -- Debug print to confirm message sent
-        print(string.format("Sent panel data to mainframe: %s - Delta Energy: %d EU - Filled: %d%%", panelName, energyUsed, fillPercentage))
+        print(string.format("Sent panel data to mainframe: %s - Delta Energy: %.2f EU/t - Filled: %d%%", panelName, deltaEnergy, fillPercentage))
     else
         print("Delta time is zero or negative. Setting delta energy to 0.")
     end
