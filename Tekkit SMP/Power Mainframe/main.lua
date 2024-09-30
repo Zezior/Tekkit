@@ -631,3 +631,4 @@ local function displayHomePage()
 
     -- Start main function
     main()
+end
