@@ -16,9 +16,8 @@ else
     return
 end
 
--- Variables to store energy readings
-local energyHistory = {}  -- Stores {time, energy} tuples
-local calculationInterval = 1  -- Calculate energy usage over 1 second
+-- Variable to store the last energy reading
+local lastEnergy = nil
 
 -- Function to extract energy data from getCardData
 local function extractEnergy(dataLine)
@@ -108,30 +107,22 @@ local function sendPanelData()
     -- Get current time
     local currentTime = os.time()
 
-    -- Append current reading to energyHistory
-    table.insert(energyHistory, {time = currentTime, energy = storedEnergy})
-
-    -- Remove readings older than calculationInterval seconds
-    while #energyHistory > 0 and (currentTime - energyHistory[1].time) > calculationInterval do
-        table.remove(energyHistory, 1)
-    end
-
-    -- Ensure we have data over the calculationInterval
-    if #energyHistory < 2 then
-        print("Not enough data to calculate energy usage. Need 1 second of data.")
+    if lastEnergy == nil then
+        -- First reading; store it and wait for the next reading
+        lastEnergy = storedEnergy
+        print("First energy reading stored. Awaiting next reading to calculate deltaEnergy.")
         return
     end
 
-    -- Find the earliest reading within the calculationInterval
-    local earliestReading = energyHistory[1]
-    local deltaEnergy_total = earliestReading.energy - storedEnergy  -- Total energy used over interval
-    local deltaTime = currentTime - earliestReading.time   -- Time elapsed in seconds
+    -- Calculate total energy used over the last second
+    local deltaEnergy_total = lastEnergy - storedEnergy  -- Total energy used over interval
+    local deltaTime = currentTime - (currentTime - 1)  -- Should be 1 second
 
     print(string.format("Delta Energy (Total): %d EU over Delta Time: %d seconds", deltaEnergy_total, deltaTime))
 
     if deltaTime > 0 then
         -- Calculate energy usage per tick
-        local deltaEnergy = deltaEnergy_total / (deltaTime * 20)  -- EU per tick
+        local deltaEnergy = deltaEnergy_total / 20  -- EU per tick (since 20 ticks per second)
         print(string.format("Delta Energy (EU/t): %.2f EU/t", deltaEnergy))
 
         -- Ensure deltaEnergy is non-negative
@@ -160,6 +151,9 @@ local function sendPanelData()
     else
         print("Delta time is zero or negative. Setting delta energy to 0.")
     end
+
+    -- Update lastEnergy for the next calculation
+    lastEnergy = storedEnergy
 end
 
 -- List all connected peripherals with sides (Debugging Step)
