@@ -325,7 +325,7 @@ function displayPESUPage(pesuData)
     end
 
     for idx, data in ipairs(pesuData) do
-        local globalIdx = (currentPesuPage - 1) * pesusPerPage * columnsPerPage + idx
+        local globalIdx = (currentPesuPage - 1) * pesusPerPage + idx
         local column = math.ceil(idx / pesusPerColumn)
         if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
@@ -423,26 +423,39 @@ local function displayHomePage()
         monitor.setCursorPos(msgX, panelY)
         monitor.write(msg)
     else
-        -- Aggregate energyUsage from all panels
-        local totalEnergyUsage = 0
+        -- Display per-sender panel data
+        local line = 1
         for senderID, panelData in pairs(panelDataList) do
-            totalEnergyUsage = totalEnergyUsage + panelData.energyUsage
-        end
+            local panelTitle = panelData.title or "Unknown Panel"
+            local fillPercentage = panelData.fillPercentage or 0
+            local energyUsage = panelData.energyUsage or 0
 
-        -- Format totalEnergyUsage using formatEUt
-        local usageText = "Power Usage: " .. formatEUt(totalEnergyUsage)
-        monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
-        monitor.write(usageText)
-        panelY = panelY + 1
+            -- Display Panel Title
+            monitor.setTextColor(colors.yellow)
+            local titleStr = string.format("Panel: %s", panelTitle)
+            local titleX = rightColumnX + math.floor((rightColumnWidth - #titleStr) / 2)
+            monitor.setCursorPos(titleX, panelY + line)
+            monitor.write(titleStr)
+            monitor.setTextColor(colors.white)
+            line = line + 1
 
-        for senderID, panelData in pairs(panelDataList) do
-            local fillText = "Filled: " .. string.format("%.2f%%", panelData.fillPercentage)
-            setColorBasedOnPercentage(panelData.fillPercentage)
-            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
-            monitor.write(fillText)
-            panelY = panelY + 2  -- Add extra space between panels
+            -- Display Fill Percentage
+            local fillStr = string.format("Fill: %s", formatPercentage(fillPercentage))
+            setColorBasedOnPercentage(fillPercentage)
+            local fillX = rightColumnX + math.floor((rightColumnWidth - #fillStr) / 2)
+            monitor.setCursorPos(fillX, panelY + line)
+            monitor.write(fillStr)
+            line = line + 1
+
+            -- Display Delta EU (Energy Usage)
+            local energyStr = string.format("Delta EU: %s", formatEUt(energyUsage))
+            monitor.setTextColor(colors.cyan)
+            local energyX = rightColumnX + math.floor((rightColumnWidth - #energyStr) / 2)
+            monitor.setCursorPos(energyX, panelY + line)
+            monitor.write(energyStr)
+            monitor.setTextColor(colors.white)
+            line = line + 2  -- Add extra space between panels
         end
-        monitor.setTextColor(colors.white)
     end
 
     -- Display reactor status above progress bar
