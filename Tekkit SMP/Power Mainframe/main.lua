@@ -428,7 +428,7 @@ local function displayHomePage()
         for senderID, panelData in pairs(panelDataList) do
             local panelTitle = panelData.title or "Unknown Panel"
             local fillPercentage = panelData.fillPercentage or 0
-            local energyUsage = panelData.energyUsage or 0
+            local deltaEnergy = panelData.deltaEnergy or 0  -- Updated field name
 
             -- Display Panel Title
             monitor.setTextColor(colors.yellow)
@@ -447,8 +447,8 @@ local function displayHomePage()
             monitor.write(fillStr)
             line = line + 1
 
-            -- Display Delta EU (Energy Usage)
-            local energyStr = string.format("Delta EU: %s", formatEUt(energyUsage))
+            -- Display Delta Energy (EU/t)
+            local energyStr = string.format("Delta Energy: %s", formatEUt(deltaEnergy))  -- Changed to formatEUt
             monitor.setTextColor(colors.cyan)
             local energyX = rightColumnX + math.floor((rightColumnWidth - #energyStr) / 2)
             monitor.setCursorPos(energyX, panelY + line)
