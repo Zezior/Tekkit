@@ -5,7 +5,7 @@ local panelSide = "bottom"         -- Side where the advanced information panel 
 print("Panel Side:", panelSide)    -- Debugging line
 local mainframeID = 4644           -- Mainframe's Rednet ID
 local modemSide = "left"           -- Side where the modem is connected
-local updateInterval = 15          -- Time in seconds between sending updates
+local updateInterval = 1          -- Time in seconds between sending updates
 
 -- Open the wireless modem for rednet communication
 if modemSide then
