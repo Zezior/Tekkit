@@ -26,7 +26,7 @@ end
 local reactorMainframeID = ids.reactorMainframeID
 local allowedSenderIDs = ids.allowedSenderIDs
 
--- Variables for monitor and UI handling
+-- Variables for monitor and button handling
 local monitor = peripheral.wrap(monitorSide)
 if not monitor then
     print("Error: No monitor found on side:", monitorSide)
@@ -59,8 +59,6 @@ local lastSentState = nil  -- Track the last sent state to prevent spamming mess
 
 -- Variables for tracking PESU data from sender computers
 local pesuDataFromSenders = {}
-local lastEUStored = nil
-local averageEUT = 0
 
 -- Variables to store panel data
 local panelDataList = {}  -- Stores panel data, indexed by senderID
@@ -76,33 +74,18 @@ local timeToFullCharge = nil   -- Time in seconds until full charge
 -- Flag to indicate if display needs refresh
 local displayNeedsRefresh = false
 
--- Function to format EU values
+-- Function to format EU values (for display purposes other than Power Usage)
 local function formatEU(value)
     if value >= 1e12 then
         return string.format("%.2f T EU", value / 1e12)
     elseif value >= 1e9 then
-        return string.format("%.2f Bil", value / 1e9)  -- Bil for billion
+        return string.format("%.2f Bil EU", value / 1e9)  -- Bil for billion
     elseif value >= 1e6 then
         return string.format("%.2f M EU", value / 1e6)
     elseif value >= 1e3 then
         return string.format("%.2f k EU", value / 1e3)
     else
         return string.format("%.0f EU", value)
-    end
-end
-
--- Function to format EU/t values
-local function formatEUt(value)
-    if value >= 1e12 then
-        return string.format("%.2f T EU/t", value / 1e12)
-    elseif value >= 1e9 then
-        return string.format("%.2f Bil/t", value / 1e9)  -- Bil for billion
-    elseif value >= 1e6 then
-        return string.format("%.2f M EU/t", value / 1e6)
-    elseif value >= 1e3 then
-        return string.format("%.2f k EU/t", value / 1e3)
-    else
-        return string.format("%.0f EU/t", value)
     end
 end
 
@@ -233,7 +216,7 @@ end
 local function detectClick(event, side, x, y)
     if event == "monitor_touch" then
         for _, button in ipairs(buttonList) do
-            if x >= button.x and x < button.x + button.width and y >= button.y and y < button.y + button.height then
+            if x >= button.x and x < (button.x + button.width) and y >= button.y and y < (button.y + button.height) then
                 return button.action
             end
         end
@@ -299,7 +282,7 @@ local function processPESUData()
 end
 
 -- Function to display the PESU Page
-function displayPESUPage(pesuData)
+local function displayPESUPage(pesuData)
     clearMonitorExceptButtons()
 
     -- Adjusted positions
@@ -423,19 +406,19 @@ local function displayHomePage()
         monitor.setCursorPos(msgX, panelY)
         monitor.write(msg)
     else
-        -- Aggregate energyUsage from all panels
-        local totalEnergyUsage = 0
         for senderID, panelData in pairs(panelDataList) do
-            totalEnergyUsage = totalEnergyUsage + panelData.energyUsage
-        end
+            monitor.setTextColor(colors.white)
+            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #panelData.title) / 2), panelY)
+            monitor.write(panelData.title)
+            panelY = panelY + 1
 
-        -- Format totalEnergyUsage using formatEUt
-        local usageText = "Power Usage: " .. formatEUt(totalEnergyUsage)
-        monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
-        monitor.write(usageText)
-        panelY = panelY + 1
+            -- Directly display Power Usage without scaling
+            local usageText = string.format("Power Usage: %.2f EU/t", panelData.energyUsage)
+            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
+            monitor.write(usageText)
+            panelY = panelY + 1
 
-        for senderID, panelData in pairs(panelDataList) do
+            -- Display Fill Percentage with color coding
             local fillText = "Filled: " .. string.format("%.2f%%", panelData.fillPercentage)
             setColorBasedOnPercentage(panelData.fillPercentage)
             monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
@@ -463,14 +446,14 @@ local function displayHomePage()
         local minutes = math.floor((timeToFullCharge % 3600) / 60)
         local seconds = math.floor(timeToFullCharge % 60)
         if hours > 0 then
-            timeToFullChargeText = string.format("Power fully charged in: %dh %dm %ds", hours, minutes, seconds)
+            timeToFullChargeText = string.format("Power facility fully charged in: %dh %dm %ds", hours, minutes, seconds)
         elseif minutes > 0 then
-            timeToFullChargeText = string.format("Power fully charged in: %dm %ds", minutes, seconds)
+            timeToFullChargeText = string.format("Power facility fully charged in: %dm %ds", minutes, seconds)
         else
-            timeToFullChargeText = string.format("Power fully charged in: %ds", seconds)
+            timeToFullChargeText = string.format("Power facility fully charged in: %ds", seconds)
         end
     else
-        timeToFullChargeText = "Power fully charged in: N/A"
+        timeToFullChargeText = "Power facility fully charged in: N/A"
     end
     -- Center the timeToFullChargeText
     centerText(timeToFullChargeText, reactorStatusY + 1)
@@ -558,11 +541,9 @@ local function monitorPESU()
         if anyPESUBelowThreshold and lastSentState ~= "turn_on_reactors" then
             sendCommand("turn_on_reactors")
             lastSentState = "turn_on_reactors"
-            print("Sent command to turn ON reactors.")
         elseif allPESUAtFull and lastSentState ~= "turn_off_reactors" then
             sendCommand("turn_off_reactors")
             lastSentState = "turn_off_reactors"
-            print("Sent command to turn OFF reactors.")
         end
 
         sleep(5)  -- Adjust sleep time as needed
@@ -578,24 +559,17 @@ local function handleIncomingData()
                 if message.command == "pesu_data" then
                     pesuDataFromSenders[senderID] = message
                     processPESUData()
-                    print("Received PESU data from sender ID:", senderID)
-                    displayNeedsRefresh = true
                 elseif message.command == "panel_data" then
                     panelDataList[senderID] = message.panelDataList[1]
-                    print("Received panel data from sender ID:", senderID)
-                    displayNeedsRefresh = true
                 elseif message.command == "reactor_status" then
                     reactorsStatus = message.status  -- "on" or "off"
                     reactorsAreOn = (message.status == "on")
                     calculateTimeToFullCharge()
-                    print("Received reactor status:", reactorsStatus)
-                    displayNeedsRefresh = true
                 elseif message.command == "total_eu_output" and message.totalEUOutput then
                     totalEUOutput = message.totalEUOutput
                     calculateTimeToFullCharge()
-                    print("Received total EU/t output:", totalEUOutput)
-                    displayNeedsRefresh = true
                 end
+                displayNeedsRefresh = true
             else
                 print("Received message from unauthorized sender ID:", senderID)
             end
@@ -619,7 +593,6 @@ local function handleButtonPresses()
         local action = detectClick(event, side, x, y)
         if action then
             action()
-            print("Button pressed:", side, x, y)
             displayNeedsRefresh = true
         end
         sleep(0.05)
@@ -629,7 +602,6 @@ end
 -- Function to update the display based on current page
 local function updateDisplay()
     if displayNeedsRefresh then
-        centerButtons()
         if page == "home" then
             displayHomePage()
         elseif page == "pesu" then
