@@ -3,7 +3,7 @@
 -- Configuration
 local panelSide = "bottom"         -- Side where the advanced information panel is connected
 print("Panel Side:", panelSide)    -- Debugging line
-local mainframeID = 4644           -- Mainframe's Rednet ID
+local mainframeID = 4644           -- Mainframe's Rednet ID (Replace with your actual mainframe ID)
 local modemSide = "left"           -- Side where the modem is connected
 local updateInterval = 1           -- Time in seconds between sending updates
 
@@ -16,9 +16,8 @@ else
     return
 end
 
--- Variables to store energy readings
-local energyHistory = {}  -- Stores {time, energy} tuples
-local calculationInterval = 20  -- Calculate energy usage over 20 seconds
+-- Variable to store the last energy reading
+local lastEnergy = nil
 
 -- Function to extract energy data from getCardData
 local function extractEnergy(dataLine)
@@ -108,31 +107,29 @@ local function sendPanelData()
     -- Get current time
     local currentTime = os.time()
 
-    -- Append current reading to energyHistory
-    table.insert(energyHistory, {time = currentTime, energy = storedEnergy})
-
-    -- Remove readings older than calculationInterval seconds
-    while #energyHistory > 0 and (currentTime - energyHistory[1].time) > calculationInterval do
-        table.remove(energyHistory, 1)
-    end
-
-    -- Ensure we have data over the calculationInterval
-    if #energyHistory < 2 then
-        print("Not enough data to calculate energy usage. Need 20 seconds of data.")
+    if lastEnergy == nil then
+        -- First reading; store it and wait for the next reading
+        lastEnergy = storedEnergy
+        print("First energy reading stored. Awaiting next reading to calculate deltaEnergy.")
         return
     end
 
-    -- Find the earliest reading within the calculationInterval
-    local earliestReading = energyHistory[1]
-    local deltaEnergy = earliestReading.energy - storedEnergy  -- Energy used
-    local deltaTime = currentTime - earliestReading.time   -- Time elapsed in seconds
+    -- Calculate total energy used over the last second
+    local deltaEnergy_total = lastEnergy - storedEnergy  -- Total energy used over interval
+    local deltaTime = currentTime - (currentTime - 1)  -- Should be 1 second
 
-    print(string.format("Delta Energy: %d EU over Delta Time: %d seconds", deltaEnergy, deltaTime))
+    print(string.format("Delta Energy (Total): %d EU over Delta Time: %d seconds", deltaEnergy_total, deltaTime))
 
     if deltaTime > 0 then
         -- Calculate energy usage per tick
-        local energyUsage = deltaEnergy / (deltaTime * 20)  -- EU per tick
-        print(string.format("Energy Usage: %.2f EU/t", energyUsage))
+        local deltaEnergy = deltaEnergy_total / 20  -- EU per tick (since 20 ticks per second)
+        print(string.format("Delta Energy (EU/t): %.2f EU/t", deltaEnergy))
+
+        -- Ensure deltaEnergy is non-negative
+        if deltaEnergy < 0 then
+            print("Warning: Negative delta energy detected. Setting to 0.")
+            deltaEnergy = 0
+        end
 
         -- Prepare the message to send
         local message = {
@@ -141,7 +138,7 @@ local function sendPanelData()
                 {
                     title = panelName,
                     fillPercentage = fillPercentage,
-                    energyUsage = energyUsage
+                    deltaEnergy = deltaEnergy  -- EU per tick
                 }
             }
         }
@@ -150,10 +147,13 @@ local function sendPanelData()
         rednet.send(mainframeID, message, "panel_data")
 
         -- Debug print to confirm message sent
-        print(string.format("Sent panel data to mainframe: %s - Energy Usage: %.2f EU/t - Filled: %d%%", panelName, energyUsage, fillPercentage))
+        print(string.format("Sent panel data to mainframe: %s - Delta Energy: %.2f EU/t - Filled: %d%%", panelName, deltaEnergy, fillPercentage))
     else
-        print("Delta time is zero or negative. Setting energy usage to 0.")
+        print("Delta time is zero or negative. Setting delta energy to 0.")
     end
+
+    -- Update lastEnergy for the next calculation
+    lastEnergy = storedEnergy
 end
 
 -- List all connected peripherals with sides (Debugging Step)
