@@ -1,10 +1,20 @@
--- Power mainframe main.lua
+-- main.lua
 
 -- Configuration
-local monitorSide = "right"     -- Adjust based on your setup
-local modemSide = "top"         -- Adjust based on your setup
+local monitorSide = "right"     -- Side where the monitor is connected
+local modemSide = "top"         -- Side where the modem is connected
 
--- Open the modem on the specified side with error handling
+-- Load IDs Configuration
+local status, ids = pcall(require, "ids")
+if not status then
+    print("Error loading ids.lua:", ids)
+    return
+end
+
+local reactorMainframeID = ids.reactorMainframeID
+local allowedSenderIDs = ids.allowedSenderIDs
+
+-- Open the wireless modem for rednet communication
 if peripheral.isPresent(modemSide) then
     rednet.open(modemSide)
     print("Rednet modem opened on side:", modemSide)
@@ -16,23 +26,14 @@ end
 -- Output the computer ID
 print("Mainframe Computer ID:", os.getComputerID())
 
--- Load allowed sender IDs from ids.lua with error handling
-local status, ids = pcall(require, "ids")
-if not status then
-    print("Error loading ids.lua:", ids)
-    return
-end
-
-local reactorMainframeID = ids.reactorMainframeID
-local allowedSenderIDs = ids.allowedSenderIDs
-
--- Variables for monitor and button handling
+-- Wrap the monitor peripheral
 local monitor = peripheral.wrap(monitorSide)
 if not monitor then
     print("Error: No monitor found on side:", monitorSide)
     return
 end
 
+-- Monitor Setup
 monitor.setTextScale(0.5)  -- Set the text scale to a smaller size
 
 -- Set custom background color
@@ -312,7 +313,7 @@ local function displayPESUPage(pesuData)
     end
 
     for idx, data in ipairs(pesuData) do
-        local globalIdx = (currentPesuPage - 1) * pesusPerPage * columnsPerPage + idx
+        local globalIdx = (currentPesuPage - 1) * pesusPerColumn * columnsPerPage + idx
         local column = math.ceil(idx / pesusPerColumn)
         if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
@@ -440,6 +441,21 @@ local function displayHomePage()
         monitor.setTextColor(colors.white)
     end
 
+    -- **Aggregating Total Power Used**
+    local totalPowerUsed = 0
+    for _, panelData in pairs(panelDataList) do
+        if panelData.totalPowerUsed then
+            totalPowerUsed = totalPowerUsed + panelData.totalPowerUsed
+        end
+    end
+
+    -- Display "Power Used: Value EU" below the Power Service section
+    local powerUsedText = string.format("Power Used: %s", formatEU(totalPowerUsed))
+    local powerUsedX = rightColumnX + math.floor((rightColumnWidth - #powerUsedText) / 2)
+    monitor.setCursorPos(powerUsedX, panelY)
+    monitor.write(powerUsedText)
+    panelY = panelY + 1
+
     -- Display reactor status above progress bar
     local reactorStatusY = h - 12
     if reactorsAreOn then
@@ -553,9 +569,11 @@ local function monitorPESU()
         if anyPESUBelowThreshold and lastSentState ~= "turn_on_reactors" then
             sendCommand("turn_on_reactors")
             lastSentState = "turn_on_reactors"
+            print("Command sent: turn_on_reactors")
         elseif allPESUAtFull and lastSentState ~= "turn_off_reactors" then
             sendCommand("turn_off_reactors")
             lastSentState = "turn_off_reactors"
+            print("Command sent: turn_off_reactors")
         end
 
         sleep(5)  -- Adjust sleep time as needed
@@ -573,6 +591,7 @@ local function handleIncomingData()
                     processPESUData()
                 elseif message.command == "panel_data" then
                     panelDataList[senderID] = message.panelDataList[1]
+                    print(string.format("Received panel_data from sender %d: Total Power Used = %s EU", senderID, formatEU(message.panelDataList[1].totalPowerUsed)))
                     if message.panelDataList[1].deltaEnergy > 0 then
                         lastNonZeroDeltaTime = os.time()
                         chunkUnloaded = false
@@ -581,9 +600,11 @@ local function handleIncomingData()
                     reactorsStatus = message.status  -- "on" or "off"
                     reactorsAreOn = (message.status == "on")
                     calculateTimeToFullCharge()
+                    print(string.format("Reactor Status Updated: %s", reactorsStatus))
                 elseif message.command == "total_eu_output" and message.totalEUOutput then
                     totalEUOutput = message.totalEUOutput
                     calculateTimeToFullCharge()
+                    print(string.format("Total EU Output Updated: %s EU/t", formatEU(totalEUOutput)))
                 end
                 -- Update chunk unloaded state
                 if page == "home" then
