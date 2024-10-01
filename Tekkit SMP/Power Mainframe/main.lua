@@ -721,3 +721,31 @@ local function displayHomePage()
 
     -- Start main function
     main()
+end
+
+-- Start main function if not already started within displayHomePage
+-- (This is to ensure that main() is called only once)
+if not main then
+    local function main()
+        page = "home"  -- Ensure the page is set to "home" on start
+
+        centerButtons()  -- Center the buttons at the start
+
+        -- Clear the monitor fully on startup
+        monitor.setBackgroundColor(bgColor)
+        monitor.clear()
+
+        displayNeedsRefresh = true  -- Flag to indicate display needs refresh
+
+        -- Start data processing and page refreshing in parallel
+        parallel.waitForAll(
+            handleIncomingData,
+            monitorPESU,
+            periodicUpdater,
+            handleButtonPresses,
+            displayLoop
+        )
+    end
+
+    main()
+end
