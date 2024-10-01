@@ -942,3 +942,4 @@ while true do
     sendPanelData()
     sleep(updateInterval)  -- Wait for the next update (1 second)
 end
+1
