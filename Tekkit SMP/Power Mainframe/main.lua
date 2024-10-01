@@ -255,11 +255,11 @@ local function processPESUData()
     for senderID, data in pairs(pesuDataFromSenders) do
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
-                totalStored = totalStored + pesuData.energy  -- Stored EU
-                totalCapacity = totalCapacity + 1000000000  -- Fixed capacity 1,000,000,000 EU
+                totalStored = totalStored + pesuData.stored  -- Stored EU
+                totalCapacity = totalCapacity + pesuData.capacity  -- Assuming capacity is sent correctly
                 table.insert(pesuList, {
-                    stored = pesuData.energy,
-                    capacity = 1000000000  -- Fixed capacity
+                    stored = pesuData.stored,
+                    capacity = pesuData.capacity  -- Fixed or variable capacity
                 })
             end
         end
@@ -315,7 +315,7 @@ local function displayPESUPage(pesuData)
     end
 
     for idx, data in ipairs(pesuData) do
-        local globalIdx = (currentPesuPage - 1) * pesusPerPage * columnsPerPage + idx
+        local globalIdx = (currentPesuPage - 1) * pesusPerPage + idx
         local column = math.ceil(idx / pesusPerColumn)
         if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
@@ -434,7 +434,7 @@ local function displayHomePage()
             end
 
             -- Display Power Used
-            local powerUsedText = string.format("Power Used: %s", formatEU(panelData.totalPowerUsed))
+            local powerUsedText = string.format("Power Used: %s", formatEU(totalPowerUsed))
             monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #powerUsedText) / 2), panelY)
             monitor.write(powerUsedText)
             panelY = panelY + 1
