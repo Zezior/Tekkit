@@ -1,11 +1,22 @@
 -- startup.lua
 
+-- ==============================
+-- Configuration Section
+-- ==============================
+
+-- Set to true to enable auto-update, false to disable
+local autoUpdate = true
+
 local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Power%20Mainframe/"
 
 local filesToUpdate = {
     "main.lua",
     "ids.lua"
 }
+
+-- ==============================
+-- Helper Functions
+-- ==============================
 
 local function printUsage()
     print("Usage:")
@@ -72,19 +83,33 @@ local function fileExists(filePath)
     return fs.exists(filePath)
 end
 
+-- ==============================
+-- Main Execution
+-- ==============================
+
 -- Ensure HTTP API is enabled
 if not http then
-    printError("wget requires http API")
+    printError("wget requires HTTP API")
     printError("Set http_enable to true in ComputerCraft.cfg")
     return
 end
 
--- Update all files
-for _, file in ipairs(filesToUpdate) do
-    if downloadFile(file) then
-        -- Introduce a small delay to ensure file writes complete
-        sleep(0.5)
+-- Perform auto-update if enabled
+if autoUpdate then
+    print("Auto-update is enabled. Checking for updates...")
+
+    for _, file in ipairs(filesToUpdate) do
+        if downloadFile(file) then
+            -- Introduce a small delay to ensure file writes complete
+            sleep(0.5)
+        else
+            print("Warning: Failed to update " .. file)
+        end
     end
+
+    print("Auto-update process completed.")
+else
+    print("Auto-update is disabled. Skipping update process.")
 end
 
 -- Verify that all required files exist before running the main program
@@ -96,7 +121,7 @@ for _, file in ipairs(filesToUpdate) do
     end
 end
 
--- Run the main program if all files were successfully downloaded
+-- Run the main program if all files were successfully downloaded or already exist
 if allFilesExist then
     local success, err = pcall(function()
         shell.run("main.lua")
