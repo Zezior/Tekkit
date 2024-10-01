@@ -82,15 +82,15 @@ local chunkUnloaded = false
 -- Function to format EU values (for display purposes other than Power Usage)
 local function formatEU(value)
     if value >= 1e12 then
-        return string.format("%.2f T EU", value / 1e12)
+        return string.format("%.2f T EU", value / 1e12)       -- Teraeu
     elseif value >= 1e9 then
-        return string.format("%.2f Bil EU", value / 1e9)  -- Bil for billion
+        return string.format("%.2f Bil EU", value / 1e9)      -- Billion EU
     elseif value >= 1e6 then
-        return string.format("%.2f M EU", value / 1e6)
+        return string.format("%.2f M EU", value / 1e6)        -- Million EU
     elseif value >= 1e3 then
-        return string.format("%.2f k EU", value / 1e3)
+        return string.format("%.2f k EU", value / 1e3)        -- Thousand EU
     else
-        return string.format("%.0f EU", value)
+        return string.format("%.0f EU", value)                -- EU
     end
 end
 
@@ -109,7 +109,15 @@ function table.contains(tbl, element)
     return false
 end
 
--- Function to center a text on the monitor screen
+-- Function to center a text within a specified column width
+local function centerTextInColumn(text, columnX, columnWidth, y)
+    local x = columnX + math.floor((columnWidth - #text) / 2)
+    if x < columnX then x = columnX end
+    monitor.setCursorPos(x, y)
+    monitor.write(text)
+end
+
+-- Function to center text across the entire screen
 local function centerText(text, y)
     local x = math.floor((w - #text) / 2) + 1
     if x < 1 then x = 1 end
@@ -290,22 +298,14 @@ end
 local function displayPESUPage(pesuData)
     clearMonitorExceptButtons()
 
-    -- Adjusted positions
-    local titleY = 1
-    local dataStartY = 3  -- Start data display from line 3
-
-    -- Centered Title
-    monitor.setTextColor(colors.green)
-    centerText("NuclearCity Power Facility", titleY)
-    monitor.setTextColor(colors.white)
-
     -- Display PESUs
     if #pesuData == 0 then
-        monitor.setCursorPos(1, dataStartY)
-        monitor.write("No PESU data available.")
+        centerText("No PESU data available.", 3)
         return
     end
 
+    local pesusPerPage = pesusPerColumn * columnsPerPage
+    local rowsPerColumn = pesusPerColumn
     local columnWidth = math.floor(w / columnsPerPage)
     local xOffsets = {}
     for i = 1, columnsPerPage do
@@ -313,24 +313,26 @@ local function displayPESUPage(pesuData)
     end
 
     for idx, data in ipairs(pesuData) do
-        local globalIdx = (currentPesuPage - 1) * pesusPerColumn * columnsPerPage + idx
-        local column = math.ceil(idx / pesusPerColumn)
+        local column = math.ceil(idx / rowsPerColumn)
         if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
         local x = xOffsets[column]
-        local y = dataStartY + ((idx - 1) % pesusPerColumn) + 2  -- Adjusted Y position
+        local y = 4 + ((idx - 1) % rowsPerColumn)  -- Adjusted Y position
         local fillPercentage = (data.stored / data.capacity) * 100
         setColorBasedOnPercentage(fillPercentage)
 
         -- Format PESU number and percentage
-        local pesuNumberStr = string.format("PESU %d:", globalIdx)
+        local pesuNumberStr = string.format("PESU %d:", (currentPesuPage - 1) * pesusPerPage + idx)
         local percentageStr = string.format("%.2f%%", fillPercentage)
 
-        -- Calculate positions to align text neatly
+        -- Combine for total text
         local totalText = pesuNumberStr .. " " .. percentageStr
+
+        -- Calculate positions to align text neatly within the column
         local textX = x + math.floor((columnWidth - #totalText) / 2)
+        if textX < x then textX = x end  -- Ensure text doesn't go beyond the column
 
         monitor.setCursorPos(textX, y)
-        monitor.write(pesuNumberStr .. " " .. percentageStr)
+        monitor.write(totalText)
     end
     monitor.setTextColor(colors.white)
 end
@@ -339,32 +341,19 @@ end
 local function displayHomePage()
     clearMonitorExceptButtons()
 
-    -- Adjusted positions
-    local titleY = 1
-    local leftColumnStartY = 4
-    local rightColumnStartY = 4
-
-    -- Centered Title with green font
+    -- **Top Title**: Centered across the entire screen
     monitor.setTextColor(colors.green)
-    centerText("NuclearCity Power Facility", titleY)
+    centerText("NuclearCity Power Facility", 1)
     monitor.setTextColor(colors.white)
 
-    local leftColumnWidth = math.floor(w / 2)
-    local rightColumnWidth = w - leftColumnWidth - 1
+    -- **Left Column: Most Drained**
+    local leftColumnWidth = math.floor(w / 2) - 1
     local leftColumnX = 1
-    local rightColumnX = leftColumnWidth + 2
-
-    -- Left Column Title centered in left half
-    local leftTitle = "Most Drained"
-    local leftTitleX = leftColumnX + math.floor((leftColumnWidth - #leftTitle) / 2)
-    monitor.setCursorPos(leftTitleX, leftColumnStartY)
-    monitor.write(leftTitle)
+    local leftTitleY = 3
+    centerTextInColumn("Most Drained", leftColumnX, leftColumnWidth, leftTitleY)
 
     if #pesuList == 0 then
-        local msg = "No PESU data available."
-        local msgX = leftColumnX + math.floor((leftColumnWidth - #msg) / 2)
-        monitor.setCursorPos(msgX, leftColumnStartY + 2)
-        monitor.write(msg)
+        centerTextInColumn("No PESU data available.", leftColumnX, leftColumnWidth, leftTitleY + 2)
     else
         local top10 = {}
         for idx, pesu in ipairs(pesuList) do
@@ -388,55 +377,54 @@ local function displayHomePage()
             local pesuNumberStr = string.format("PESU %d:", pesu.index)
             local percentageStr = string.format("%.2f%%", fillPercentage)
 
-            -- Calculate positions to align text neatly
+            -- Combine for total text
             local totalText = pesuNumberStr .. " " .. percentageStr
-            local textX = leftColumnX + math.floor((leftColumnWidth - #totalText) / 2)
 
-            monitor.setCursorPos(textX, leftColumnStartY + i)
-            monitor.write(pesuNumberStr .. " " .. percentageStr)
+            -- Calculate positions to align text neatly within the left column
+            local textX = leftColumnX + math.floor((leftColumnWidth - #totalText) / 2)
+            if textX < leftColumnX then textX = leftColumnX end
+
+            monitor.setCursorPos(textX, leftTitleY + i)
+            monitor.write(totalText)
         end
         monitor.setTextColor(colors.white)
     end
 
-    -- Right Column Title centered in right half
-    local rightTitle = "NuclearCity Power Service"
-    local rightTitleX = rightColumnX + math.floor((rightColumnWidth - #rightTitle) / 2)
-    monitor.setCursorPos(rightTitleX, rightColumnStartY)
-    monitor.write(rightTitle)
+    -- **Right Column: NuclearCity Power Service**
+    local rightColumnWidth = math.floor(w / 2) - 1
+    local rightColumnX = math.floor(w / 2) + 1
+    local rightTitleY = 3
+    centerTextInColumn("NuclearCity Power Service", rightColumnX, rightColumnWidth, rightTitleY)
 
-    local panelY = rightColumnStartY + 1
+    local panelY = rightTitleY + 1
     if next(panelDataList) == nil then
-        local msg = "Getting Power Service Stats"
-        local msgX = rightColumnX + math.floor((rightColumnWidth - #msg) / 2)
-        monitor.setCursorPos(msgX, panelY)
-        monitor.write(msg)
+        centerText("Getting Power Stats", panelY)
     else
         for senderID, panelData in pairs(panelDataList) do
-            monitor.setTextColor(colors.white)
-            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #panelData.title) / 2), panelY)
+            -- Set Data Color to Blue
+            monitor.setTextColor(colors.blue)
+            local titleX = rightColumnX + math.floor((rightColumnWidth - #panelData.title) / 2)
+            monitor.setCursorPos(titleX, panelY)
             monitor.write(panelData.title)
             panelY = panelY + 1
 
             if chunkUnloaded then
                 -- Display "Chunk Unloaded" instead of Power Usage
-                local unloadedText = "Chunk Unloaded"
-                monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #unloadedText) / 2), panelY)
-                monitor.write(unloadedText)
+                centerTextInColumn("Chunk Unloaded", rightColumnX, rightColumnWidth, panelY)
                 panelY = panelY + 1
             else
                 -- Display Power Usage using deltaEnergy
-                local usageText = string.format("Power Usage: %.2f EU/t", panelData.deltaEnergy)
-                monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #usageText) / 2), panelY)
-                monitor.write(usageText)
+                local usageText = string.format("Power Usage: %.2f EU/t", panelData.deltaEnergy)  -- Added space before EU/t
+                centerTextInColumn(usageText, rightColumnX, rightColumnWidth, panelY)
                 panelY = panelY + 1
             end
 
-            -- Display Fill Percentage with color coding
-            local fillText = "Filled: " .. string.format("%.2f%%", panelData.fillPercentage)
-            setColorBasedOnPercentage(panelData.fillPercentage)
-            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #fillText) / 2), panelY)
-            monitor.write(fillText)
-            panelY = panelY + 2  -- Add extra space between panels
+            -- Display Fill Percentage
+            local fillPercentage = panelData.fillPercentage  -- Numeric value
+            local fillText = string.format("Filled: %.2f%%", fillPercentage)
+            setColorBasedOnPercentage(fillPercentage)
+            centerTextInColumn(fillText, rightColumnX, rightColumnWidth, panelY)
+            panelY = panelY + 1  -- Increment by 1 to remove extra space
         end
         monitor.setTextColor(colors.white)
     end
@@ -449,15 +437,22 @@ local function displayHomePage()
         end
     end
 
-    -- Display "Power Used: Value EU" below the Power Service section
-    local powerUsedText = string.format("Power Used: %s", formatEU(totalPowerUsed))
-    local powerUsedX = rightColumnX + math.floor((rightColumnWidth - #powerUsedText) / 2)
-    monitor.setCursorPos(powerUsedX, panelY)
-    monitor.write(powerUsedText)
-    panelY = panelY + 1
+    if next(panelDataList) ~= nil then
+        -- Display "Power Used: Value EU" below the Power Service section only if data is present
+        monitor.setTextColor(colors.blue)  -- Set text color to blue
+        local powerUsedText = string.format("Power Used: %s", formatEU(totalPowerUsed))
+        centerTextInColumn(powerUsedText, rightColumnX, rightColumnWidth, panelY)
+        panelY = panelY + 1
+        monitor.setTextColor(colors.white)  -- Reset text color to white
+    end
 
-    -- Display reactor status above progress bar
-    local reactorStatusY = h - 12
+    -- **New Section**: Centered Texts Near the Bottom
+    -- Calculate Y positions near the bottom, just above the progress bar
+    local reactorStatusY = h - 10  -- Positioned above the time to full charge
+    local timeToFullChargeY = h - 9 -- Just above "Total Power Capacity"
+    local capacityY = h - 8        -- Just above the progress bar
+
+    -- Display reactor status above time to full charge
     if reactorsAreOn then
         monitor.setTextColor(colors.green)
         centerText("Reactors are ON", reactorStatusY)
@@ -484,14 +479,14 @@ local function displayHomePage()
         timeToFullChargeText = "Power facility fully charged in: N/A"
     end
     -- Center the timeToFullChargeText
-    centerText(timeToFullChargeText, reactorStatusY + 1)
+    centerText(timeToFullChargeText, timeToFullChargeY)
 
     -- Display total power capacity
-    local capacityY = reactorStatusY + 2
-    monitor.setTextColor(colors.white)
+    monitor.setTextColor(colors.blue)  -- Set text color to blue
     local capacityText = string.format("Total Power Capacity: %s / %s", formatEU(totalStored), formatEU(totalCapacity))
     -- Center the capacityText
     centerText(capacityText, capacityY)
+    monitor.setTextColor(colors.white)  -- Reset text color to white
 
     -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = 0
