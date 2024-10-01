@@ -2,26 +2,18 @@
 
 -- Configuration
 local panelSide = "bottom"         -- Side where the advanced information panel is connected
+print("Panel Side:", panelSide)    -- Debugging line
+local mainframeID = 4644           -- Mainframe's Rednet ID (Replace with your actual mainframe ID)
 local modemSide = "left"           -- Side where the modem is connected
 local updateInterval = 1           -- Time in seconds between sending updates
 local logFile = "power_used.txt"   -- File to store total power used
 
--- Load IDs Configuration
-local status, ids = pcall(require, "ids")
-if not status then
-    print("Error loading ids.lua:", ids)
-    return
-end
-
-local mainframeID = ids.reactorMainframeID
-local allowedSenderIDs = ids.allowedSenderIDs
-
 -- Open the wireless modem for rednet communication
-if peripheral.isPresent(modemSide) then
-    rednet.open(modemSide)
-    print("Rednet modem opened on side:", modemSide)
+if modemSide then
+    print("Opening modem on side:", modemSide)
+    rednet.open(modemSide)  -- Adjust the side where your modem is connected
 else
-    print("Error: No modem found on side:", modemSide)
+    print("Error: modemSide is nil!")
     return
 end
 
@@ -31,38 +23,18 @@ local lastEnergy = nil
 -- Variable to store total power used
 local totalPowerUsed = 0
 
--- Function to format EU values
-local function formatEU(value)
-    if value >= 1e12 then
-        return string.format("%.2fT EU", value / 1e12)
-    elseif value >= 1e9 then
-        return string.format("%.2fBil EU", value / 1e9)  -- Bil for billion
-    elseif value >= 1e6 then
-        return string.format("%.2fM EU", value / 1e6)
-    elseif value >= 1e3 then
-        return string.format("%.2fk EU", value / 1e3)
-    else
-        return string.format("%.0f EU", value)
-    end
-end
-
 -- Function to load total power used from file
 local function loadTotalPowerUsed()
     if fs.exists(logFile) then
         local file = fs.open(logFile, "r")
-        if file then
-            local content = file.readAll()
-            file.close()
-            local value = tonumber(content)
-            if value then
-                totalPowerUsed = value
-                print(string.format("Loaded total power used: %s", formatEU(totalPowerUsed)))
-            else
-                print("Error: Invalid data in power_used.txt. Starting from 0.")
-                totalPowerUsed = 0
-            end
+        local content = file.readAll()
+        file.close()
+        local value = tonumber(content)
+        if value then
+            totalPowerUsed = value
+            print(string.format("Loaded total power used: %s", formatEU(totalPowerUsed)))
         else
-            print("Error: Unable to open power_used.txt.")
+            print("Error: Invalid data in power_used.txt. Starting from 0.")
             totalPowerUsed = 0
         end
     else
@@ -74,12 +46,22 @@ end
 -- Function to save total power used to file
 local function saveTotalPowerUsed()
     local file = fs.open(logFile, "w")
-    if file then
-        file.write(tostring(totalPowerUsed))
-        file.close()
-        print("Saved total power used to power_used.txt")
+    file.write(tostring(totalPowerUsed))
+    file.close()
+end
+
+-- Function to format EU values
+local function formatEU(value)
+    if value >= 1e12 then
+        return string.format("%.2f T EU", value / 1e12)
+    elseif value >= 1e9 then
+        return string.format("%.2f Bil EU", value / 1e9)  -- Bil for billion
+    elseif value >= 1e6 then
+        return string.format("%.2f M EU", value / 1e6)
+    elseif value >= 1e3 then
+        return string.format("%.2f k EU", value / 1e3)
     else
-        print("Error: Unable to write to power_used.txt")
+        return string.format("%.0f EU", value)
     end
 end
 
@@ -122,7 +104,7 @@ end
 local function sendPanelData()
     -- Debug: Print panelSide before wrapping
     print("Attempting to wrap peripheral on side:", panelSide)
-
+    
     -- Wrap the panel peripheral connected directly
     local panelPeripheral = peripheral.wrap(panelSide)
 
@@ -228,23 +210,18 @@ local function sendPanelData()
     lastEnergy = storedEnergy
 end
 
--- Function to list all connected peripherals with sides (Debugging Step)
-local function listPeripherals()
-    print("Listing all connected peripherals with sides:")
-    local sides = {"left", "right", "top", "bottom", "front", "back", "up", "down"}
+-- List all connected peripherals with sides (Debugging Step)
+print("Listing all connected peripherals with sides:")
+local sides = {"left", "right", "top", "bottom", "front", "back", "up", "down"}
 
-    for _, side in ipairs(sides) do
-        if peripheral.isPresent(side) then
-            print(side .. ": " .. peripheral.getType(side))
-        end
+for _, side in ipairs(sides) do
+    if peripheral.isPresent(side) then
+        print(side .. ": " .. peripheral.getType(side))
     end
 end
 
 -- Load total power used from file
 loadTotalPowerUsed()
-
--- List connected peripherals for debugging
-listPeripherals()
 
 -- Main loop to send data at intervals
 while true do
