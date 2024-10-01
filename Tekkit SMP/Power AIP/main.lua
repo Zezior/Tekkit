@@ -6,6 +6,7 @@ print("Panel Side:", panelSide)    -- Debugging line
 local mainframeID = 4644           -- Mainframe's Rednet ID (Replace with your actual mainframe ID)
 local modemSide = "left"           -- Side where the modem is connected
 local updateInterval = 1           -- Time in seconds between sending updates
+local logFile = "power_used.txt"   -- File to store total power used
 
 -- Open the wireless modem for rednet communication
 if modemSide then
@@ -18,6 +19,51 @@ end
 
 -- Variable to store the last energy reading
 local lastEnergy = nil
+
+-- Variable to store total power used
+local totalPowerUsed = 0
+
+-- Function to load total power used from file
+local function loadTotalPowerUsed()
+    if fs.exists(logFile) then
+        local file = fs.open(logFile, "r")
+        local content = file.readAll()
+        file.close()
+        local value = tonumber(content)
+        if value then
+            totalPowerUsed = value
+            print(string.format("Loaded total power used: %s", formatEU(totalPowerUsed)))
+        else
+            print("Error: Invalid data in power_used.txt. Starting from 0.")
+            totalPowerUsed = 0
+        end
+    else
+        totalPowerUsed = 0
+        print("No existing power_used.txt found. Starting from 0.")
+    end
+end
+
+-- Function to save total power used to file
+local function saveTotalPowerUsed()
+    local file = fs.open(logFile, "w")
+    file.write(tostring(totalPowerUsed))
+    file.close()
+end
+
+-- Function to format EU values
+local function formatEU(value)
+    if value >= 1e12 then
+        return string.format("%.2f T EU", value / 1e12)
+    elseif value >= 1e9 then
+        return string.format("%.2f Bil EU", value / 1e9)  -- Bil for billion
+    elseif value >= 1e6 then
+        return string.format("%.2f M EU", value / 1e6)
+    elseif value >= 1e3 then
+        return string.format("%.2f k EU", value / 1e3)
+    else
+        return string.format("%.0f EU", value)
+    end
+end
 
 -- Function to extract energy data from getCardData
 local function extractEnergy(dataLine)
@@ -131,6 +177,13 @@ local function sendPanelData()
             deltaEnergy = 0
         end
 
+        -- Update total power used
+        totalPowerUsed = totalPowerUsed + deltaEnergy
+        print(string.format("Total Power Used: %s", formatEU(totalPowerUsed)))
+
+        -- Save total power used to file
+        saveTotalPowerUsed()
+
         -- Prepare the message to send
         local message = {
             command = "panel_data",
@@ -138,7 +191,8 @@ local function sendPanelData()
                 {
                     title = panelName,
                     fillPercentage = fillPercentage,
-                    deltaEnergy = deltaEnergy  -- EU per tick
+                    deltaEnergy = deltaEnergy,          -- EU per tick
+                    totalPowerUsed = totalPowerUsed     -- Total EU used
                 }
             }
         }
@@ -147,7 +201,7 @@ local function sendPanelData()
         rednet.send(mainframeID, message, "panel_data")
 
         -- Debug print to confirm message sent
-        print(string.format("Sent panel data to mainframe: %s - Delta Energy: %.2f EU/t - Filled: %d%%", panelName, deltaEnergy, fillPercentage))
+        print(string.format("Sent panel data to mainframe: %s - Delta Energy: %.2f EU/t - Filled: %d%% - Power Used: %s", panelName, deltaEnergy, fillPercentage, formatEU(totalPowerUsed)))
     else
         print("Delta time is zero or negative. Setting delta energy to 0.")
     end
@@ -165,6 +219,9 @@ for _, side in ipairs(sides) do
         print(side .. ": " .. peripheral.getType(side))
     end
 end
+
+-- Load total power used from file
+loadTotalPowerUsed()
 
 -- Main loop to send data at intervals
 while true do

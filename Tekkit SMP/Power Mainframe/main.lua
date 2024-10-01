@@ -78,6 +78,9 @@ local displayNeedsRefresh = false
 local lastNonZeroDeltaTime = os.time()
 local chunkUnloaded = false
 
+-- Variable to store total power used
+local totalPowerUsed = 0
+
 -- Function to format EU values (for display purposes other than Power Usage)
 local function formatEU(value)
     if value >= 1e12 then
@@ -430,6 +433,12 @@ local function displayHomePage()
                 panelY = panelY + 1
             end
 
+            -- Display Power Used
+            local powerUsedText = string.format("Power Used: %s", formatEU(panelData.totalPowerUsed))
+            monitor.setCursorPos(rightColumnX + math.floor((rightColumnWidth - #powerUsedText) / 2), panelY)
+            monitor.write(powerUsedText)
+            panelY = panelY + 1
+
             -- Display Fill Percentage with color coding
             local fillText = "Filled: " .. string.format("%.2f%%", panelData.fillPercentage)
             setColorBasedOnPercentage(panelData.fillPercentage)
@@ -576,6 +585,9 @@ local function handleIncomingData()
                     if message.panelDataList[1].deltaEnergy > 0 then
                         lastNonZeroDeltaTime = os.time()
                         chunkUnloaded = false
+                    end
+                    if message.panelDataList[1].totalPowerUsed then
+                        totalPowerUsed = message.panelDataList[1].totalPowerUsed
                     end
                 elseif message.command == "reactor_status" then
                     reactorsStatus = message.status  -- "on" or "off"
