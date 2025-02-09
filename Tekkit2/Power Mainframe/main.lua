@@ -2,7 +2,7 @@
 
 -- Configuration
 local monitorSide = "right"     -- Side where the monitor is connected
-local modemSide = "top"         -- Side where the modem is connected
+local modemSide = "back"         -- Side where the modem is connected
 
 -- Load IDs Configuration
 local status, ids = pcall(require, "ids")
