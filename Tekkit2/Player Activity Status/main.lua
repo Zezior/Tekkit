@@ -19,9 +19,8 @@ monitor.clear()
 
 -- List of introspection modules and corresponding player names
 local introspectionModules = {
-    {side = "top", name = "ReactorKing"},
-    -- {side = "back", name = "N/A"},
-    -- {side = "left", name = "N/A"},  -- Uncomment and set thirdPersonEnabled to true to enable
+    {side = "top", name = "ReactorKing"}
+    -- Removed DK_Qemistry and gqlxy
 }
 
 -- Open the wireless modem
@@ -45,10 +44,7 @@ end
 
 local function getCurrentTime()
     local time = os.date("*t")
-    time.hour = time.hour + 1
-    if time.hour >= 24 then
-        time.hour = time.hour - 24
-    end
+    -- Removed the manual adjustment for timezone. It now uses os.date time directly.
     return string.format("%02d:%02d:%02d", time.hour, time.min, time.sec)
 end
 
