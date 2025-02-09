@@ -20,8 +20,8 @@ monitor.clear()
 -- List of introspection modules and corresponding player names
 local introspectionModules = {
     {side = "top", name = "ReactorKing"},
-    {side = "back", name = "DK_Qemistry"},
-    -- {side = "left", name = "Gqlxy"},  -- Uncomment and set thirdPersonEnabled to true to enable
+    -- {side = "back", name = "N/A"},
+    -- {side = "left", name = "N/A"},  -- Uncomment and set thirdPersonEnabled to true to enable
 }
 
 -- Open the wireless modem
