@@ -1,13 +1,12 @@
 -- startup.lua
 
-redstone.setOutput("top", false)
-
-
-local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit2/Reactor%20Sender/"
-
-local filesToUpdate = {
-    "main.lua",
-}
+local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit2/Wireless%20EMC%20Monitor/"
+local filesToUpdate = 
+                        { 
+                        "main.lua", 
+                        "emc_values.json" 
+                        }
+local emcLogPath = "emc_used.log"
 
 local function printUsage()
     print("Usage:")
@@ -81,7 +80,10 @@ if not http then
     return
 end
 
--- Update all files
+-- Create the emc_used.log file if it doesn't exist, but never overwrite
+createBlankFileIfMissing(emcLogPath)
+
+-- Update all necessary files (main.lua and emc_values.json)
 for _, file in ipairs(filesToUpdate) do
     if downloadFile(file) then
         -- Introduce a small delay to ensure file writes complete

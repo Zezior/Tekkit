@@ -1,9 +1,6 @@
 -- startup.lua
 
-redstone.setOutput("top", false)
-
-
-local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit2/Reactor%20Sender/"
+local githubUrl = "https://raw.githubusercontent.com/Zezior/Tekkit/main/Tekkit%20SMP/Wireless%20EMC%20Monitor/EMC%20Display/"
 
 local filesToUpdate = {
     "main.lua",
