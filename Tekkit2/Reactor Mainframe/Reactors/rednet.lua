@@ -1,6 +1,6 @@
 -- Reactor Mainframe rednet.lua
 
-local modemSide = "top"  -- Adjust if needed
+local modemSide = "back"  -- Adjust if needed
 rednet.open(modemSide)
 
 -- Function to receive reactor data via rednet

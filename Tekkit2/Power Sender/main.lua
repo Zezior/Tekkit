@@ -1,4 +1,5 @@
--- pesu_sender_auto.lua
+-- Power sender 
+-- main.lua
 
 -- Configuration
 local wirelessModemSide = "back"    -- Side where the wireless modem is attached
