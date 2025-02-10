@@ -5,7 +5,7 @@ return {
         4710, -- Temp base
         4845 -- Reactor 1
     },
-    activityCheckID = 4641,     -- Activity Check Computer ID
-    powerMainframeID = 4644,    -- Power Mainframe Computer ID
+    activityCheckID = 7561,     -- Activity Check Computer ID
+    powerMainframeID = 7560,    -- Power Mainframe Computer ID
     reactorMainframeID = os.getComputerID()
 }
