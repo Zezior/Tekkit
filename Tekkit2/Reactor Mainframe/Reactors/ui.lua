@@ -4,14 +4,14 @@ local monitor = peripheral.wrap("right")
 local style = require("style")
 monitor.setTextScale(style.style.textScale)
 local repo = nil
-local reactorIDs = {}
+local reactorIDs = {}  -- This will be our sorted list of reactor IDs (numbers)
 local reactors = {}
 local pages = {}
 local reactorOutputLog = {}
 local w, h = monitor.getSize()
 local buttonList = {}
 
--- Add missing function: setColorBasedOnPercentage
+-- Missing function added
 local function setColorBasedOnPercentage(percentage)
     if percentage >= 100 then
         monitor.setTextColor(colors.blue)
@@ -35,14 +35,14 @@ Button.__index = Button
 
 function Button:new(reactorID, x, y, width, height, text, color, action)
     local button = setmetatable({}, Button)
-    button.reactorID = reactorID
+    button.reactorID = reactorID  -- This should be a number (reactor ID)
     button.x = x
     button.y = y
     button.width = width
     button.height = height
     button.text = text
     button.color = color
-    button.action = action
+    button.action = action  -- Action string for navigation or reactor buttons
     return button
 end
 
@@ -60,7 +60,7 @@ end
 
 function Button:handlePress()
     if self.reactorID then
-        local id = self.reactorID
+        local id = self.reactorID  -- id is a number
         local currentState = repo.get(id .. "_state")
         local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
         if reactorData.destroyed then
@@ -86,7 +86,8 @@ function Button:handlePress()
         if self.action == "toggle_all" then
             manualOverride = true
             local anyReactorOff = false
-            for _, reactorData in pairs(reactors) do
+            for _, id in ipairs(reactorIDs) do
+                local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     if not reactorData.active then
                         anyReactorOff = true
@@ -95,7 +96,7 @@ function Button:handlePress()
                 end
             end
             local reactorsChanged = false
-            for _, id in pairs(reactorIDs) do
+            for _, id in ipairs(reactorIDs) do
                 local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                 if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
                     repo.set(id .. "_state", anyReactorOff)
@@ -111,12 +112,12 @@ function Button:handlePress()
             self.text = anyReactorOff and "All Off" or "All On"
             self.color = anyReactorOff and colors.red or colors.green
             self:draw()
-            displayHomePage(repo, reactorTable, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+            displayHomePage(repo, nil, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
         elseif self.action == "reset" then
             manualOverride = false
             local reactorsChanged = false
             if not reactorsOnDueToPESU or not anyPlayerOnline then
-                for _, id in pairs(reactorIDs) do
+                for _, id in ipairs(reactorIDs) do
                     local state = repo.get(id .. "_state")
                     if state then
                         repo.set(id .. "_state", false)
@@ -129,7 +130,7 @@ function Button:handlePress()
                     sendReactorStatus("off")
                 end
             else
-                for _, id in pairs(reactorIDs) do
+                for _, id in ipairs(reactorIDs) do
                     local state = repo.get(id .. "_state")
                     local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
                     if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
@@ -145,7 +146,7 @@ function Button:handlePress()
                     sendReactorStatus("on")
                 end
             end
-            displayHomePage(repo, reactorTable, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+            displayHomePage(repo, nil, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
         else
             return self.action
         end
@@ -153,10 +154,15 @@ function Button:handlePress()
 end
 
 function bindReactorButtons(reactorTable, passedRepo)
-    reactorIDs = reactorTable
+    -- reactorTable is a dictionary with keys = reactor ID, values = {id = reactorID, name = ...}
+    -- We also want to build reactorIDs as a sorted list of numbers.
+    reactorIDs = {}  -- Reset reactorIDs
+    for id, data in pairs(reactorTable) do
+        table.insert(reactorIDs, id)
+    end
+    table.sort(reactorIDs)
     repo = passedRepo
-    for reactorName, reactorData in pairs(reactorIDs) do
-        local id = reactorData.id
+    for _, id in ipairs(reactorIDs) do
         repo.bind(id .. "_state", function(newState)
             for _, button in pairs(buttonList) do
                 if button.reactorID == id then
@@ -225,6 +231,7 @@ end
 function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDsPassed)
     resetButtons()
     reactors = reactorsPassed
+    -- reactorIDsPassed is assumed to be a list of reactor IDs (numbers)
     reactorIDs = reactorIDsPassed
     pages.numReactorPages = numReactorPages
     style.applyStyle()
@@ -242,8 +249,8 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
     local columns = 2
     local columnWidth = math.floor(w / columns)
     for idx = startIdx, endIdx do
-        local reactorID = reactorIDs[idx]
-        local reactorData = reactors[reactorID]
+        local id = reactorIDs[idx]
+        local reactorData = reactors[id]
         if reactorData then
             local reactorIndexOnPage = idx - startIdx
             local column = math.floor(reactorIndexOnPage / reactorsPerColumn) + 1
@@ -252,7 +259,7 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
             local y = 3 + (row - 1) * 6
             local buttonX = x
             local buttonY = y
-            addReactorControlButtons(reactorID, reactorData.active, buttonX, buttonY, reactorData, 6)
+            addReactorControlButtons(id, reactorData.active, buttonX, buttonY, reactorData, 6)
             monitor.setCursorPos(x + 6, y)
             monitor.write(reactorData.reactorName)
             monitor.setCursorPos(x + 6, y + 1)
@@ -276,7 +283,7 @@ end
 function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESUPassed, manualOverridePassed)
     resetButtons()
     repo = repoPassed
-    reactorIDs = reactorTablePassed
+    -- Do not overwrite reactorIDs here; assume the sorted list is maintained
     reactors = reactorsPassed
     pages.numReactorPages = numReactorPagesPassed
     reactorOutputLog = reactorOutputLogPassed
