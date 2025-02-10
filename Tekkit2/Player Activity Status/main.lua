@@ -1,40 +1,31 @@
 -- Player Activity main.lua
 
 local ids = dofile("ids.lua")
-local reactorMainframeID = ids.reactorMainframeID  -- Ensure this is defined in your ids.lua
+local reactorMainframeID = ids.reactorMainframeID
 
 local monitorSide = "right"
 local modemSide = "back"
 local monitor = peripheral.wrap(monitorSide)
 
--- Set custom background color
-local bgColor = colors.brown  -- Using 'colors.brown' as the slot for custom color
-monitor.setPaletteColor(bgColor, 18 / 255, 53 / 255, 36 / 255)  -- RGB values for #123524
-
--- Apply background color and text settings
+local bgColor = colors.brown
+monitor.setPaletteColor(bgColor, 18 / 255, 53 / 255, 36 / 255)
 monitor.setBackgroundColor(bgColor)
 monitor.setTextColor(colors.white)
-monitor.setTextScale(1)  -- Increased text scale for larger font
+monitor.setTextScale(1)
 monitor.clear()
 
--- List of introspection modules and corresponding player names
 local introspectionModules = {
     {side = "top", name = "ReactorKing"}
-    -- Removed DK_Qemistry and gqlxy
 }
 
--- Open the wireless modem
 rednet.open(modemSide)
 
-local anyOnline = false  -- Global variable to track if any player is online
+local anyOnline = false
 
 local function checkPlayerOnline(introspection)
-    -- Attempt to access the inventory and return the result
     local success, inv = pcall(function()
         return introspection and introspection.getInventory and introspection.getInventory() or nil
     end)
-    
-    -- Check if we retrieved inventory data successfully
     if success and inv then
         return true
     else
@@ -44,7 +35,6 @@ end
 
 local function getCurrentTime()
     local time = os.date("*t")
-    -- Removed the manual adjustment for timezone. It now uses os.date time directly.
     return string.format("%02d:%02d:%02d", time.hour, time.min, time.sec)
 end
 
@@ -79,7 +69,6 @@ local function displayToMonitor(lines)
     drawBorder()
     local w, h = monitor.getSize()
     local startLine = math.ceil(h / 2 - #lines / 2) + 1
-
     for i, line in ipairs(lines) do
         local name, status = string.match(line, "^(.-): (.+)$")
         if name and status then
@@ -138,7 +127,6 @@ local function handleMessages()
 end
 
 local function mainLoop()
-    -- Initial countdown
     local countdown = 10
     local timerID = os.startTimer(1)
     while countdown > 0 do
@@ -160,13 +148,11 @@ local function mainLoop()
 
     local lastStatus = nil
     local lastSentTime = os.clock()
-    local sendInterval = 15  -- seconds
+    local sendInterval = 15
 
     while true do
         local status = {}
         anyOnline = false
-
-        -- Check each introspection module
         for _, module in ipairs(introspectionModules) do
             local introspection = peripheral.wrap(module.side)
             if introspection then
@@ -182,7 +168,6 @@ local function mainLoop()
             end
         end
 
-        -- Update display
         local displayLines = {}
         for _, module in ipairs(introspectionModules) do
             displayLines[#displayLines + 1] = module.name .. ": " .. status[module.name]
@@ -193,9 +178,7 @@ local function mainLoop()
         local currentTime = os.clock()
 
         if lastStatus == nil then
-            -- First run, send status immediately
             if anyOnline then
-                -- Wait for chunks to load (only once)
                 waitForChunksToLoad(10, status)
             end
             rednet.send(reactorMainframeID, {command = anyOnline and "player_online" or "player_offline"}, "reactor_control")
@@ -203,30 +186,24 @@ local function mainLoop()
             lastStatus = anyOnline
             lastSentTime = currentTime
         elseif anyOnline ~= lastStatus then
-            -- Status changed, send message immediately
             if anyOnline then
-                -- Player came online
                 waitForChunksToLoad(10, status)
                 rednet.send(reactorMainframeID, {command = "player_online"}, "reactor_control")
                 print("Sent 'player_online' command to mainframe.")
             else
-                -- Player went offline
                 rednet.send(reactorMainframeID, {command = "player_offline"}, "reactor_control")
                 print("Sent 'player_offline' command to mainframe.")
             end
             lastStatus = anyOnline
             lastSentTime = currentTime
         elseif currentTime - lastSentTime >= sendInterval then
-            -- Send regular status update
             rednet.send(reactorMainframeID, {command = anyOnline and "player_online" or "player_offline"}, "reactor_control")
             print("Sent regular status update to mainframe:", anyOnline and "player_online" or "player_offline")
             lastSentTime = currentTime
         end
 
-        -- Sleep for 1 second before next check
         sleep(1)
     end
 end
 
--- Run the main function and message handler in parallel
 parallel.waitForAny(mainLoop, handleMessages)

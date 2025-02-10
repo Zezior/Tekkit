@@ -1,5 +1,4 @@
--- Power mainframe ids.lua
-
+-- Power Mainframe ids.lua
 return {
     reactorMainframeID = 7562,  -- Replace with your reactor mainframe ID if different
     allowedSenderIDs = {
