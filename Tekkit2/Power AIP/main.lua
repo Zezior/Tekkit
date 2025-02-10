@@ -2,8 +2,8 @@
 
 -- Configuration
 local panelSide = "bottom"         -- Side where the advanced information panel is connected
-local modemSide = "left"           -- Side where the modem is connected
-local mainframeID = 4644           -- Reactor Mainframe's Computer ID (replace with actual ID)
+local modemSide = "right"           -- Side where the modem is connected
+local mainframeID = 7562           -- Reactor Mainframe's Computer ID (replace with actual ID)
 local updateInterval = 1           -- Time in seconds between sending updates
 local logFile = "power_used.txt"   -- File to store total power used
 
