@@ -1,8 +1,8 @@
 -- reactor_sender.lua
 
 local config = {
-    mainframeID = 4709,          -- Rednet ID of the main control computer (update if needed)
-    updateInterval = 30,         -- Time in seconds between data updates
+    mainframeID = 7562,          -- Rednet ID of the main control computer (update if needed)
+    updateInterval = 15,         -- Time in seconds between data updates
     redstoneSide = "back",        -- The side where redstone controls the reactor
     infoPanelSide = "bottom",     -- Side where the advanced information panel is connected
     reactorNameFile = "reactor_name.txt"  -- File to store the reactor's name
