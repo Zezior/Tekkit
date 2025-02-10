@@ -11,6 +11,21 @@ local reactorOutputLog = {}
 local w, h = monitor.getSize()
 local buttonList = {}
 
+-- Add missing function: setColorBasedOnPercentage
+local function setColorBasedOnPercentage(percentage)
+    if percentage >= 100 then
+        monitor.setTextColor(colors.blue)
+    elseif percentage >= 80 then
+        monitor.setTextColor(colors.green)
+    elseif percentage >= 50 then
+        monitor.setTextColor(colors.yellow)
+    elseif percentage >= 20 then
+        monitor.setTextColor(colors.orange)
+    else
+        monitor.setTextColor(colors.red)
+    end
+end
+
 local function resetButtons()
     buttonList = {}
 end
@@ -222,7 +237,7 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
     monitor.setTextColor(style.style.textColor)
     local reactorsPerPage = 10
     local startIdx = (pageNum - 1) * reactorsPerPage + 1
-    local endIdx = math.min(startIdx + reactorsPerPage -1, #reactorIDs)
+    local endIdx = math.min(startIdx + reactorsPerPage - 1, #reactorIDs)
     local reactorsPerColumn = 5
     local columns = 2
     local columnWidth = math.floor(w / columns)
@@ -240,7 +255,7 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
             addReactorControlButtons(reactorID, reactorData.active, buttonX, buttonY, reactorData, 6)
             monitor.setCursorPos(x + 6, y)
             monitor.write(reactorData.reactorName)
-            monitor.setCursorPos(x + 6, y +1)
+            monitor.setCursorPos(x + 6, y + 1)
             if reactorData.active then
                 monitor.setTextColor(colors.green)
                 monitor.write("Status: On")
@@ -249,9 +264,9 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
                 monitor.write("Status: Off")
             end
             monitor.setTextColor(style.style.textColor)
-            monitor.setCursorPos(x + 6, y +2)
+            monitor.setCursorPos(x + 6, y + 2)
             monitor.write("Temp: " .. reactorData.temp)
-            monitor.setCursorPos(x + 6, y +3)
+            monitor.setCursorPos(x + 6, y + 3)
             monitor.write("EU Output: " .. reactorData.euOutput)
         end
     end
