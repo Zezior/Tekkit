@@ -4,7 +4,7 @@ local ids = dofile("ids.lua")
 local reactorMainframeID = ids.reactorMainframeID  -- Ensure this is defined in your ids.lua
 
 local monitorSide = "right"
-local modemSide = "front"
+local modemSide = "back"
 local monitor = peripheral.wrap(monitorSide)
 
 -- Set custom background color
