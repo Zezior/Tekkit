@@ -51,7 +51,7 @@ function repo.set(key, value)
 end
 
 -- Ensure Rednet is open on the mainframe
-rednet.open("top")  -- Adjust the side as needed for the modem
+rednet.open("back")  -- Adjust the side as needed for the modem
 
 -- Function to load reactor output log from file
 local function loadReactorOutputLog()
