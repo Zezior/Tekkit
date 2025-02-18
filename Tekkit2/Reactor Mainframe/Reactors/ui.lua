@@ -3,10 +3,15 @@
 local monitor = peripheral.wrap("right")
 local style = require("style")
 monitor.setTextScale(style.style.textScale)
+
+-- Definitions for PESU paging
+local pesusPerColumn = 25
+local columnsPerPage = 3
+
 local repo = nil
 local reactorIDs = {}  -- Sorted list of reactor IDs (numbers)
 local reactors = {}
-local pages = {}
+local pages = {}         -- Will store page info; pages.numReactorPages is used
 local reactorOutputLog = {}
 local w, h = monitor.getSize()
 local buttonList = {}
@@ -68,7 +73,7 @@ end
 
 function Button:handlePress()
     if self.reactorID then
-        local id = self.reactorID
+        local id = self.reactorID  -- id is a number
         local currentState = repo.get(id .. "_state")
         local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
         if reactorData.destroyed then
@@ -283,130 +288,6 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
         end
     end
     centerButtons("reactor" .. pageNum, pages.numReactorPages)
-end
-
--- Updated displayHomePage: now accepts totalStored and totalCapacity as optional parameters.
-function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESUPassed, manualOverridePassed, totalStored, totalCapacity)
-    -- If totalStored or totalCapacity are not provided, default to 0.
-    totalStored = totalStored or 0
-    totalCapacity = totalCapacity or 0
-
-    resetButtons()
-    repo = repoPassed
-    -- Build reactorIDs from reactorTablePassed (do not overwrite sorted reactorIDs if already maintained)
-    reactorIDs = {}
-    for id, data in pairs(reactorTablePassed) do
-        reactorIDs[id] = {id = id, name = data.name}
-    end
-    reactors = reactorsPassed
-    pages.numReactorPages = numReactorPagesPassed
-    reactorOutputLog = reactorOutputLogPassed
-    reactorsOnDueToPESU = reactorsOnDueToPESUPassed
-    manualOverride = manualOverridePassed
-    style.applyStyle()
-    monitor.clear()
-    local header = "NuclearCity - Reactor Main Frame"
-    local xHeader = math.floor((w - #header) / 2) + 1
-    monitor.setCursorPos(xHeader, 1)
-    monitor.setTextColor(colors.green)
-    monitor.write(header)
-    displayReactorLists()
-    local totalOperationalReactors = 0
-    local activeReactors = 0
-    for _, reactor in pairs(reactors) do
-        if not reactor.isMaintenance and not reactor.destroyed then
-            totalOperationalReactors = totalOperationalReactors + 1
-            if reactor.active then
-                activeReactors = activeReactors + 1
-            end
-        end
-    end
-    local fillPercentage = 0
-    if totalOperationalReactors > 0 then
-        fillPercentage = (activeReactors / totalOperationalReactors) * 100
-    end
-    local progressBarY = h - 7
-    local currentOutputY = progressBarY - 2
-    local totalOutputY = currentOutputY - 1
-    local reactorsAreOn = false
-    for _, reactorData in pairs(reactors) do
-        if reactorData.active then
-            reactorsAreOn = true
-            break
-        end
-    end
-    local statusText = reactorsAreOn and "Reactors Are ON" or "Reactors Are OFF"
-    local statusColor = reactorsAreOn and colors.green or colors.red
-    monitor.setTextColor(statusColor)
-    local xStatus = math.floor((w - #statusText) / 2) + 1
-    monitor.setCursorPos(xStatus, totalOutputY - 1)
-    monitor.write(statusText)
-    monitor.setTextColor(style.style.textColor)
-    local totalOutputText = "Total Reactor Output: " .. formatEUOutput(computeOutputs())
-    local xTotalOutput = math.floor((w - #totalOutputText) / 2) + 1
-    monitor.setCursorPos(xTotalOutput, totalOutputY)
-    monitor.clearLine()
-    monitor.write(totalOutputText)
-    local currentOutputText = "Current Reactor Output: " .. formatEUOutput(computeOutputs())
-    local xCurrentOutput = math.floor((w - #currentOutputText) / 2) + 1
-    monitor.setCursorPos(xCurrentOutput, currentOutputY)
-    monitor.clearLine()
-    monitor.write(currentOutputText)
-    local buttonY = totalOutputY
-    local buttonWidth = 8
-    local buttonHeight = 2
-    local buttonX = 2
-    local anyReactorOff = false
-    for _, reactorData in pairs(reactors) do
-        if not reactorData.isMaintenance and not reactorData.overheating and not reactorData.destroyed then
-            if not reactorData.active then
-                anyReactorOff = true
-                break
-            end
-        end
-    end
-    local masterButtonText = anyReactorOff and "All On" or "All Off"
-    local masterButtonColor = anyReactorOff and colors.green or colors.red
-    local masterButton = Button:new(nil, buttonX, buttonY, buttonWidth, buttonHeight, masterButtonText, masterButtonColor, "toggle_all")
-    masterButton:draw()
-    table.insert(buttonList, masterButton)
-    local resetButtonX = buttonX + buttonWidth + 2
-    local resetButton = Button:new(nil, resetButtonX, buttonY, buttonWidth, buttonHeight, "Reset", colors.orange, "reset")
-    resetButton:draw()
-    table.insert(buttonList, resetButton)
-    if manualOverride then
-        monitor.setCursorPos(buttonX, buttonY - 1)
-        monitor.setTextColor(colors.orange)
-        monitor.write("Manual Override Active")
-        monitor.setTextColor(style.style.textColor)
-    end
-    local progressBarWidth = w - 4
-    local filledBars = math.floor((fillPercentage / 100) * (progressBarWidth - 2))
-    monitor.setCursorPos(3, progressBarY)
-    monitor.setBackgroundColor(colors.black)
-    monitor.write(string.rep(" ", progressBarWidth))
-    monitor.setCursorPos(3, progressBarY + 1)
-    monitor.write(" ")
-    monitor.setCursorPos(2 + progressBarWidth, progressBarY + 1)
-    monitor.write(" ")
-    monitor.setCursorPos(3, progressBarY + 2)
-    monitor.write(string.rep(" ", progressBarWidth))
-    setColorBasedOnPercentage(fillPercentage)
-    monitor.setBackgroundColor(colors.black)
-    monitor.setCursorPos(4, progressBarY + 1)
-    monitor.write(string.rep(" ", progressBarWidth - 2))
-    monitor.setBackgroundColor(monitor.getTextColor())
-    monitor.setCursorPos(4, progressBarY + 1)
-    monitor.write(string.rep(" ", filledBars))
-    monitor.setBackgroundColor(colors.black)
-    monitor.setTextColor(colors.white)
-    local percentageText = formatPercentage(fillPercentage)
-    local percentageX = math.floor((w - #percentageText) / 2) + 1
-    monitor.setCursorPos(percentageX, progressBarY + 1)
-    monitor.write(percentageText)
-    monitor.setBackgroundColor(bgColor)
-    monitor.setTextColor(colors.white)
-    centerButtons("home", pages.numReactorPages)
 end
 
 function displayReactorLists()
