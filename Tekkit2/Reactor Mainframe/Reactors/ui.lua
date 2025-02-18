@@ -11,7 +11,12 @@ local reactorOutputLog = {}
 local w, h = monitor.getSize()
 local buttonList = {}
 
--- Missing function added
+-- Define sendReactorStatus function (stub) to prevent nil errors.
+local function sendReactorStatus(status)
+    -- This function can be expanded to send status updates as needed.
+    print("sendReactorStatus called with status: " .. status)
+end
+
 local function setColorBasedOnPercentage(percentage)
     if percentage >= 100 then
         monitor.setTextColor(colors.blue)
@@ -112,7 +117,7 @@ function Button:handlePress()
             self.text = anyReactorOff and "All Off" or "All On"
             self.color = anyReactorOff and colors.red or colors.green
             self:draw()
-            displayHomePage(repo, nil, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+            displayHomePage(repo, reactorTable, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
         elseif self.action == "reset" then
             manualOverride = false
             local reactorsChanged = false
@@ -146,7 +151,7 @@ function Button:handlePress()
                     sendReactorStatus("on")
                 end
             end
-            displayHomePage(repo, nil, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
+            displayHomePage(repo, reactorTable, reactors, pages.numReactorPages, reactorOutputLog, reactorsOnDueToPESU, manualOverride)
         else
             return self.action
         end
@@ -154,9 +159,7 @@ function Button:handlePress()
 end
 
 function bindReactorButtons(reactorTable, passedRepo)
-    -- reactorTable is a dictionary with keys = reactor ID, values = {id = reactorID, name = ...}
-    -- We also want to build reactorIDs as a sorted list of numbers.
-    reactorIDs = {}  -- Reset reactorIDs
+    reactorIDs = {}  -- Reset reactorIDs as a sorted list of numbers
     for id, data in pairs(reactorTable) do
         table.insert(reactorIDs, id)
     end
@@ -231,7 +234,6 @@ end
 function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDsPassed)
     resetButtons()
     reactors = reactorsPassed
-    -- reactorIDsPassed is assumed to be a list of reactor IDs (numbers)
     reactorIDs = reactorIDsPassed
     pages.numReactorPages = numReactorPages
     style.applyStyle()
@@ -283,7 +285,10 @@ end
 function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESUPassed, manualOverridePassed)
     resetButtons()
     repo = repoPassed
-    -- Do not overwrite reactorIDs here; assume the sorted list is maintained
+    reactorIDs = {}  -- Do not overwrite reactorIDs; assume sorted list is maintained externally.
+    for id, data in pairs(reactorTablePassed) do
+        reactorIDs[id] = {id = id, name = data.name}
+    end
     reactors = reactorsPassed
     pages.numReactorPages = numReactorPagesPassed
     reactorOutputLog = reactorOutputLogPassed
@@ -386,12 +391,12 @@ function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReac
     monitor.write(string.rep(" ", filledBars))
     monitor.setBackgroundColor(colors.black)
     monitor.setTextColor(colors.white)
-    local percentageText = string.format("%.2f%%", fillPercentage)
+    local percentageText = formatPercentage(fillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
     monitor.setCursorPos(percentageX, progressBarY + 1)
     monitor.write(percentageText)
-    monitor.setBackgroundColor(style.style.backgroundColor)
-    monitor.setTextColor(style.style.textColor)
+    monitor.setBackgroundColor(bgColor)
+    monitor.setTextColor(colors.white)
     centerButtons("home", pages.numReactorPages)
 end
 
