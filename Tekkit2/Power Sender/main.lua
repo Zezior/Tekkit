@@ -2,7 +2,7 @@
 -- main.lua
 
 -- Configuration
-local wirelessModemSide = "top"    -- Side where the wireless modem is attached
+local wirelessModemSide = "back"    -- Side where the wireless modem is attached
 local updateInterval = 10           -- Time in seconds between sending updates
 local mainframeID = 7560            -- Mainframe's Rednet ID
 
