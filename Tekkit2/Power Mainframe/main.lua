@@ -49,6 +49,7 @@ local buttonList = {}  -- Store buttons for click detection
 local w, h = monitor.getSize() -- Get the monitor's width and height
 local page = "home"  -- Start on Home Page
 local pagesData = {} -- Data for PESU pages
+local pages = { numReactorPages = 1 } -- Pages table (set to 1 page if not used)
 local refreshInterval = 5  -- Refresh data every 5 seconds
 local totalStored, totalCapacity = 0, 0  -- Store totals
 local pesusPerColumn = 25  -- Number of PESUs per column
@@ -82,15 +83,15 @@ local chunkUnloaded = false
 -- Function to format EU values (for display purposes other than Power Usage)
 local function formatEU(value)
     if value >= 1e12 then
-        return string.format("%.2f T EU", value / 1e12)       -- Teraeu
+        return string.format("%.2f T EU", value / 1e12)
     elseif value >= 1e9 then
-        return string.format("%.2f Bil EU", value / 1e9)      -- Billion EU
+        return string.format("%.2f Bil EU", value / 1e9)
     elseif value >= 1e6 then
-        return string.format("%.2f M EU", value / 1e6)        -- Million EU
+        return string.format("%.2f M EU", value / 1e6)
     elseif value >= 1e3 then
-        return string.format("%.2f k EU", value / 1e3)        -- Thousand EU
+        return string.format("%.2f k EU", value / 1e3)
     else
-        return string.format("%.0f EU", value)                -- EU
+        return string.format("%.0f EU", value)
     end
 end
 
@@ -99,7 +100,6 @@ local function formatPercentage(value)
     return string.format("%.2f%%", value)
 end
 
--- Helper function to check if a value exists in a table
 function table.contains(tbl, element)
     for _, value in pairs(tbl) do
         if tonumber(value) == tonumber(element) then
@@ -109,7 +109,6 @@ function table.contains(tbl, element)
     return false
 end
 
--- Function to center a text within a specified column width
 local function centerTextInColumn(text, columnX, columnWidth, y)
     local x = columnX + math.floor((columnWidth - #text) / 2)
     if x < columnX then x = columnX end
@@ -117,7 +116,6 @@ local function centerTextInColumn(text, columnX, columnWidth, y)
     monitor.write(text)
 end
 
--- Function to center text across the entire screen
 local function centerText(text, y)
     local x = math.floor((w - #text) / 2) + 1
     if x < 1 then x = 1 end
@@ -125,7 +123,6 @@ local function centerText(text, y)
     monitor.write(text)
 end
 
--- Function to set color based on percentage
 local function setColorBasedOnPercentage(percentage)
     if percentage >= 100 then
         monitor.setTextColor(colors.blue)
@@ -140,7 +137,6 @@ local function setColorBasedOnPercentage(percentage)
     end
 end
 
--- Function to draw a button
 local function drawButton(label, x, y, width, height, color)
     monitor.setBackgroundColor(color)
     monitor.setTextColor(colors.white)
@@ -155,25 +151,23 @@ local function drawButton(label, x, y, width, height, color)
     monitor.setBackgroundColor(bgColor)
 end
 
--- Function to define a button
 local function defineButton(name, x, y, width, height, action, color)
-    color = color or colors.blue  -- Default color is blue
+    color = color or colors.blue
     table.insert(buttonList, {name = name, x = x, y = y, width = width, height = height, action = action, color = color})
     drawButton(name, x, y, width, height, color)
 end
 
--- Function to center buttons at the bottom of the screen
 local function centerButtons()
-    local buttonWidth = 10  -- Width of each button
-    local buttonHeight = 3  -- Height of each button
-    local totalButtons = 2  -- Home button + PESU page
+    local buttonWidth = 10
+    local buttonHeight = 3
+    local totalButtons = 2
     if numPesuPages > 1 and page == "pesu" then
-        totalButtons = totalButtons + 2  -- Add Previous and Next buttons
+        totalButtons = totalButtons + 2
     end
     local totalWidth = totalButtons * buttonWidth + (totalButtons - 1) * 2
     local startX = math.floor((w - totalWidth) / 2) + 1
 
-    buttonList = {}  -- Reset button list
+    buttonList = {}
 
     local homeButtonColor = (page == "home") and colors.green or colors.blue
     defineButton("Home", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
@@ -210,7 +204,6 @@ local function centerButtons()
     end
 end
 
--- Function to clear the monitor except for the buttons
 local function clearMonitorExceptButtons()
     monitor.setBackgroundColor(bgColor)
     monitor.clear()
@@ -219,7 +212,6 @@ local function clearMonitorExceptButtons()
     end
 end
 
--- Check if a player clicked on a button
 local function detectClick(event, side, x, y)
     if event == "monitor_touch" then
         for _, button in ipairs(buttonList) do
@@ -231,9 +223,8 @@ local function detectClick(event, side, x, y)
     return nil
 end
 
--- Function to calculate time to full charge
 local function calculateTimeToFullCharge()
-    local netInput = totalEUOutput * 20  -- Convert EU/t to EU per second (20 ticks per second)
+    local netInput = totalEUOutput * 20
     if netInput <= 0 then
         timeToFullCharge = nil
     else
@@ -246,7 +237,6 @@ local function calculateTimeToFullCharge()
     end
 end
 
--- Function to process PESU data from sender computers
 local function processPESUData()
     totalStored = 0
     totalCapacity = 0
@@ -255,12 +245,9 @@ local function processPESUData()
     for senderID, data in pairs(pesuDataFromSenders) do
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
-                totalStored = totalStored + pesuData.energy  -- Stored EU
-                totalCapacity = totalCapacity + 1000000000  -- Fixed capacity
-                table.insert(pesuList, {
-                    stored = pesuData.energy,
-                    capacity = 1000000000
-                })
+                totalStored = totalStored + pesuData.energy
+                totalCapacity = totalCapacity + 1000000000
+                table.insert(pesuList, { stored = pesuData.energy, capacity = 1000000000 })
             end
         end
     end
@@ -284,10 +271,8 @@ local function processPESUData()
     displayNeedsRefresh = true
 end
 
--- Function to display the PESU Page
 local function displayPESUPage(pesuData)
     clearMonitorExceptButtons()
-
     if #pesuData == 0 then
         centerText("No PESU data available.", 3)
         return
@@ -308,25 +293,19 @@ local function displayPESUPage(pesuData)
         local y = 4 + ((idx - 1) % rowsPerColumn)
         local fillPercentage = (data.stored / data.capacity) * 100
         setColorBasedOnPercentage(fillPercentage)
-
         local pesuNumberStr = string.format("PESU %d:", (currentPesuPage - 1) * pesusPerPage + idx)
         local percentageStr = string.format("%.2f%%", fillPercentage)
-
         local totalText = pesuNumberStr .. " " .. percentageStr
-
         local textX = x + math.floor((columnWidth - #totalText) / 2)
         if textX < x then textX = x end
-
         monitor.setCursorPos(textX, y)
         monitor.write(totalText)
     end
     monitor.setTextColor(colors.white)
 end
 
--- Function to display the Home Page
 local function displayHomePage()
     clearMonitorExceptButtons()
-
     monitor.setTextColor(colors.green)
     centerText("NuclearCity Power Facility", 1)
     monitor.setTextColor(colors.white)
@@ -343,26 +322,20 @@ local function displayHomePage()
         for idx, pesu in ipairs(pesuList) do
             table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, index = idx})
         end
-
         table.sort(top10, function(a, b)
             local aPercent = (a.stored / a.capacity)
             local bPercent = (b.stored / b.capacity)
             return aPercent < bPercent
         end)
-
         for i = 1, math.min(10, #top10) do
             local pesu = top10[i]
             local fillPercentage = (pesu.stored / pesu.capacity) * 100
             setColorBasedOnPercentage(fillPercentage)
-
             local pesuNumberStr = string.format("PESU %d:", pesu.index)
             local percentageStr = string.format("%.2f%%", fillPercentage)
-
             local totalText = pesuNumberStr .. " " .. percentageStr
-
             local textX = leftColumnX + math.floor((leftColumnWidth - #totalText) / 2)
             if textX < leftColumnX then textX = leftColumnX end
-
             monitor.setCursorPos(textX, leftTitleY + i)
             monitor.write(totalText)
         end
@@ -384,7 +357,6 @@ local function displayHomePage()
             monitor.setCursorPos(titleX, panelY)
             monitor.write(panelData.title)
             panelY = panelY + 1
-
             if chunkUnloaded then
                 centerTextInColumn("Chunk Unloaded", rightColumnX, rightColumnWidth, panelY)
                 panelY = panelY + 1
@@ -393,7 +365,6 @@ local function displayHomePage()
                 centerTextInColumn(usageText, rightColumnX, rightColumnWidth, panelY)
                 panelY = panelY + 1
             end
-
             local fillPercentage = panelData.fillPercentage
             local fillText = string.format("Filled: %.2f%%", fillPercentage)
             setColorBasedOnPercentage(fillPercentage)
@@ -495,18 +466,15 @@ local function displayHomePage()
     centerButtons("home", pages.numReactorPages)
 end
 
--- Function to send commands to reactor mainframe
 local function sendCommand(command)
     rednet.send(reactorMainframeID, {command = command}, "reactor_control")
 end
 
--- Function to request reactor data
 local function requestReactorData()
     rednet.send(reactorMainframeID, {command = "request_reactor_status"}, "reactor_control")
     rednet.send(reactorMainframeID, {command = "request_total_eu_output"}, "reactor_control")
 end
 
--- Function to monitor PESU levels and control reactors
 local function monitorPESU()
     while true do
         local anyPESUBelowThreshold = false
@@ -536,7 +504,6 @@ local function monitorPESU()
     end
 end
 
--- Function to handle incoming data
 local function handleIncomingData()
     while true do
         local event, senderID, message, protocol = os.pullEvent("rednet_message")
@@ -580,7 +547,6 @@ local function handleIncomingData()
     end
 end
 
--- Function to periodically request reactor data and refresh display
 local function periodicUpdater()
     while true do
         requestReactorData()
@@ -589,7 +555,6 @@ local function periodicUpdater()
     end
 end
 
--- Function to handle button presses
 local function handleButtonPresses()
     while true do
         local event, side, x, y = os.pullEvent("monitor_touch")
@@ -602,7 +567,6 @@ local function handleButtonPresses()
     end
 end
 
--- Function to update the display based on current page
 local function updateDisplay()
     if displayNeedsRefresh then
         if page == "home" then
@@ -619,7 +583,6 @@ local function updateDisplay()
     end
 end
 
--- Function to refresh the monitor display
 local function displayLoop()
     while true do
         updateDisplay()
@@ -627,7 +590,6 @@ local function displayLoop()
     end
 end
 
--- Main function
 local function main()
     page = "home"
     centerButtons()
