@@ -4,14 +4,14 @@ local monitor = peripheral.wrap("right")
 local style = require("style")
 monitor.setTextScale(style.style.textScale)
 local repo = nil
-local reactorIDs = {}  -- This will be our sorted list of reactor IDs (numbers)
+local reactorIDs = {}  -- Sorted list of reactor IDs (numbers)
 local reactors = {}
 local pages = {}
 local reactorOutputLog = {}
 local w, h = monitor.getSize()
 local buttonList = {}
 
--- Stub for sendReactorStatus (log its call)
+-- Stub for sendReactorStatus (for logging)
 local function sendReactorStatus(status)
     print("sendReactorStatus called with status: " .. status)
 end
@@ -43,14 +43,14 @@ Button.__index = Button
 
 function Button:new(reactorID, x, y, width, height, text, color, action)
     local button = setmetatable({}, Button)
-    button.reactorID = reactorID  -- This should be a number (reactor ID)
+    button.reactorID = reactorID  -- Number (reactor ID) or nil for navigation buttons
     button.x = x
     button.y = y
     button.width = width
     button.height = height
     button.text = text
     button.color = color
-    button.action = action  -- Action string for navigation or reactor buttons
+    button.action = action  -- Navigation or command action
     return button
 end
 
@@ -68,7 +68,7 @@ end
 
 function Button:handlePress()
     if self.reactorID then
-        local id = self.reactorID  -- id is a number
+        local id = self.reactorID
         local currentState = repo.get(id .. "_state")
         local reactorData = reactors[id] or { isMaintenance = false, overheating = false, destroyed = false }
         if reactorData.destroyed then
@@ -162,7 +162,7 @@ function Button:handlePress()
 end
 
 function bindReactorButtons(reactorTable, passedRepo)
-    reactorIDs = {}  -- Reset reactorIDs as a sorted list of numbers
+    reactorIDs = {}  -- Build sorted list of reactor IDs (numbers)
     for id, data in pairs(reactorTable) do
         table.insert(reactorIDs, id)
     end
@@ -285,10 +285,16 @@ function displayReactorData(reactorsPassed, pageNum, numReactorPages, reactorIDs
     centerButtons("reactor" .. pageNum, pages.numReactorPages)
 end
 
-function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESUPassed, manualOverridePassed)
+-- Updated displayHomePage: now accepts totalStored and totalCapacity as optional parameters.
+function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESUPassed, manualOverridePassed, totalStored, totalCapacity)
+    -- If totalStored or totalCapacity are not provided, default to 0.
+    totalStored = totalStored or 0
+    totalCapacity = totalCapacity or 0
+
     resetButtons()
     repo = repoPassed
-    reactorIDs = {}  -- Build sorted reactorIDs list from reactorTablePassed
+    -- Build reactorIDs from reactorTablePassed (do not overwrite sorted reactorIDs if already maintained)
+    reactorIDs = {}
     for id, data in pairs(reactorTablePassed) do
         reactorIDs[id] = {id = id, name = data.name}
     end
@@ -463,7 +469,9 @@ end
 function computeOutputs()
     local totalReactorOutput = 0
     for id, data in pairs(reactorOutputLog) do
-        totalReactorOutput = totalReactorOutput + data.maxOutput
+        if data.maxOutput then
+            totalReactorOutput = totalReactorOutput + data.maxOutput
+        end
     end
     local currentReactorOutput = 0
     for id, reactor in pairs(reactors) do
