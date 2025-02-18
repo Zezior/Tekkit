@@ -11,10 +11,13 @@ local reactorOutputLog = {}
 local w, h = monitor.getSize()
 local buttonList = {}
 
--- Define sendReactorStatus function (stub) to prevent nil errors.
+-- Stub for sendReactorStatus (log its call)
 local function sendReactorStatus(status)
-    -- This function can be expanded to send status updates as needed.
     print("sendReactorStatus called with status: " .. status)
+end
+
+local function formatPercentage(value)
+    return string.format("%.2f%%", value)
 end
 
 local function setColorBasedOnPercentage(percentage)
@@ -285,7 +288,7 @@ end
 function displayHomePage(repoPassed, reactorTablePassed, reactorsPassed, numReactorPagesPassed, reactorOutputLogPassed, reactorsOnDueToPESUPassed, manualOverridePassed)
     resetButtons()
     repo = repoPassed
-    reactorIDs = {}  -- Do not overwrite reactorIDs; assume sorted list is maintained externally.
+    reactorIDs = {}  -- Build sorted reactorIDs list from reactorTablePassed
     for id, data in pairs(reactorTablePassed) do
         reactorIDs[id] = {id = id, name = data.name}
     end
