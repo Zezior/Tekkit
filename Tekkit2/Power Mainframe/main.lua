@@ -148,7 +148,6 @@ local function drawButton(label, x, y, width, height, color)
         monitor.setCursorPos(x, y + i)
         monitor.write(string.rep(" ", width))
     end
-    -- Center the label
     local labelX = x + math.floor((width - #label) / 2)
     local labelY = y + math.floor(height / 2)
     monitor.setCursorPos(labelX, labelY)
@@ -176,7 +175,6 @@ local function centerButtons()
 
     buttonList = {}  -- Reset button list
 
-    -- Define Home button
     local homeButtonColor = (page == "home") and colors.green or colors.blue
     defineButton("Home", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
         page = "home"
@@ -185,7 +183,6 @@ local function centerButtons()
     end, homeButtonColor)
     startX = startX + buttonWidth + 2
 
-    -- Define PESU page button
     local pesuButtonColor = (page == "pesu") and colors.green or colors.blue
     defineButton("PESUs", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
         page = "pesu"
@@ -196,7 +193,6 @@ local function centerButtons()
     startX = startX + buttonWidth + 2
 
     if page == "pesu" and numPesuPages > 1 then
-        -- Define Previous Page button
         defineButton("Prev", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
             if currentPesuPage > 1 then
                 currentPesuPage = currentPesuPage - 1
@@ -205,7 +201,6 @@ local function centerButtons()
         end)
         startX = startX + buttonWidth + 2
 
-        -- Define Next Page button
         defineButton("Next", startX, h - buttonHeight + 1, buttonWidth, buttonHeight, function()
             if currentPesuPage < numPesuPages then
                 currentPesuPage = currentPesuPage + 1
@@ -219,7 +214,6 @@ end
 local function clearMonitorExceptButtons()
     monitor.setBackgroundColor(bgColor)
     monitor.clear()
-    -- Redraw buttons after clearing the screen
     for _, button in ipairs(buttonList) do
         drawButton(button.name, button.x, button.y, button.width, button.height, button.color)
     end
@@ -262,23 +256,20 @@ local function processPESUData()
         if data.pesuDataList then
             for _, pesuData in ipairs(data.pesuDataList) do
                 totalStored = totalStored + pesuData.energy  -- Stored EU
-                totalCapacity = totalCapacity + 1000000000  -- Fixed capacity 1,000,000,000 EU
+                totalCapacity = totalCapacity + 1000000000  -- Fixed capacity
                 table.insert(pesuList, {
                     stored = pesuData.energy,
-                    capacity = 1000000000  -- Fixed capacity
+                    capacity = 1000000000
                 })
             end
         end
     end
 
-    -- Calculate number of PESU pages
     local pesusPerPage = pesusPerColumn * columnsPerPage
     numPesuPages = math.ceil(#pesuList / pesusPerPage)
 
-    -- Recalculate button positions
     centerButtons()
 
-    -- Organize PESUs into pages
     pagesData = {}
     for pageNum = 1, numPesuPages do
         pagesData[pageNum] = {}
@@ -289,7 +280,6 @@ local function processPESUData()
         end
     end
 
-    -- Recalculate time to full charge
     calculateTimeToFullCharge()
     displayNeedsRefresh = true
 end
@@ -298,7 +288,6 @@ end
 local function displayPESUPage(pesuData)
     clearMonitorExceptButtons()
 
-    -- Display PESUs
     if #pesuData == 0 then
         centerText("No PESU data available.", 3)
         return
@@ -314,22 +303,19 @@ local function displayPESUPage(pesuData)
 
     for idx, data in ipairs(pesuData) do
         local column = math.ceil(idx / rowsPerColumn)
-        if column > columnsPerPage then column = columnsPerPage end  -- Prevent overflow
+        if column > columnsPerPage then column = columnsPerPage end
         local x = xOffsets[column]
-        local y = 4 + ((idx - 1) % rowsPerColumn)  -- Adjusted Y position
+        local y = 4 + ((idx - 1) % rowsPerColumn)
         local fillPercentage = (data.stored / data.capacity) * 100
         setColorBasedOnPercentage(fillPercentage)
 
-        -- Format PESU number and percentage
         local pesuNumberStr = string.format("PESU %d:", (currentPesuPage - 1) * pesusPerPage + idx)
         local percentageStr = string.format("%.2f%%", fillPercentage)
 
-        -- Combine for total text
         local totalText = pesuNumberStr .. " " .. percentageStr
 
-        -- Calculate positions to align text neatly within the column
         local textX = x + math.floor((columnWidth - #totalText) / 2)
-        if textX < x then textX = x end  -- Ensure text doesn't go beyond the column
+        if textX < x then textX = x end
 
         monitor.setCursorPos(textX, y)
         monitor.write(totalText)
@@ -341,12 +327,10 @@ end
 local function displayHomePage()
     clearMonitorExceptButtons()
 
-    -- **Top Title**: Centered across the entire screen
     monitor.setTextColor(colors.green)
     centerText("NuclearCity Power Facility", 1)
     monitor.setTextColor(colors.white)
 
-    -- **Left Column: Most Drained**
     local leftColumnWidth = math.floor(w / 2) - 1
     local leftColumnX = 1
     local leftTitleY = 3
@@ -360,27 +344,22 @@ local function displayHomePage()
             table.insert(top10, {stored = pesu.stored, capacity = pesu.capacity, index = idx})
         end
 
-        -- Sort PESUs by percentage drained (ascending)
         table.sort(top10, function(a, b)
             local aPercent = (a.stored / a.capacity)
             local bPercent = (b.stored / b.capacity)
             return aPercent < bPercent
         end)
 
-        -- Display top 10
         for i = 1, math.min(10, #top10) do
             local pesu = top10[i]
             local fillPercentage = (pesu.stored / pesu.capacity) * 100
             setColorBasedOnPercentage(fillPercentage)
 
-            -- Format PESU number and percentage
             local pesuNumberStr = string.format("PESU %d:", pesu.index)
             local percentageStr = string.format("%.2f%%", fillPercentage)
 
-            -- Combine for total text
             local totalText = pesuNumberStr .. " " .. percentageStr
 
-            -- Calculate positions to align text neatly within the left column
             local textX = leftColumnX + math.floor((leftColumnWidth - #totalText) / 2)
             if textX < leftColumnX then textX = leftColumnX end
 
@@ -390,7 +369,6 @@ local function displayHomePage()
         monitor.setTextColor(colors.white)
     end
 
-    -- **Right Column: NuclearCity Power Service**
     local rightColumnWidth = math.floor(w / 2) - 1
     local rightColumnX = math.floor(w / 2) + 1
     local rightTitleY = 3
@@ -401,7 +379,6 @@ local function displayHomePage()
         centerText("Getting Power Stats", panelY)
     else
         for senderID, panelData in pairs(panelDataList) do
-            -- Set Data Color to Blue
             monitor.setTextColor(colors.blue)
             local titleX = rightColumnX + math.floor((rightColumnWidth - #panelData.title) / 2)
             monitor.setCursorPos(titleX, panelY)
@@ -409,27 +386,23 @@ local function displayHomePage()
             panelY = panelY + 1
 
             if chunkUnloaded then
-                -- Display "Chunk Unloaded" instead of Power Usage
                 centerTextInColumn("Chunk Unloaded", rightColumnX, rightColumnWidth, panelY)
                 panelY = panelY + 1
             else
-                -- Display Power Usage using deltaEnergy
-                local usageText = string.format("Power Usage: %.2f EU/t", panelData.deltaEnergy)  -- Added space before EU/t
+                local usageText = string.format("Power Usage: %.2f EU/t", panelData.deltaEnergy)
                 centerTextInColumn(usageText, rightColumnX, rightColumnWidth, panelY)
                 panelY = panelY + 1
             end
 
-            -- Display Fill Percentage
-            local fillPercentage = panelData.fillPercentage  -- Numeric value
+            local fillPercentage = panelData.fillPercentage
             local fillText = string.format("Filled: %.2f%%", fillPercentage)
             setColorBasedOnPercentage(fillPercentage)
             centerTextInColumn(fillText, rightColumnX, rightColumnWidth, panelY)
-            panelY = panelY + 1  -- Increment by 1 to remove extra space
+            panelY = panelY + 1
         end
         monitor.setTextColor(colors.white)
     end
 
-    -- **Aggregating Total Power Used**
     local totalPowerUsed = 0
     for _, panelData in pairs(panelDataList) do
         if panelData.totalPowerUsed then
@@ -438,21 +411,17 @@ local function displayHomePage()
     end
 
     if next(panelDataList) ~= nil then
-        -- Display "Power Used: Value EU" below the Power Service section only if data is present
-        monitor.setTextColor(colors.blue)  -- Set text color to blue
+        monitor.setTextColor(colors.blue)
         local powerUsedText = string.format("Power Used: %s", formatEU(totalPowerUsed))
         centerTextInColumn(powerUsedText, rightColumnX, rightColumnWidth, panelY)
         panelY = panelY + 1
-        monitor.setTextColor(colors.white)  -- Reset text color to white
+        monitor.setTextColor(colors.white)
     end
 
-    -- **New Section**: Centered Texts Near the Bottom
-    -- Calculate Y positions near the bottom, just above the progress bar
-    local reactorStatusY = h - 10  -- Positioned above the time to full charge
-    local timeToFullChargeY = h - 9 -- Just above "Total Power Capacity"
-    local capacityY = h - 8        -- Just above the progress bar
+    local reactorStatusY = h - 10
+    local timeToFullChargeY = h - 9
+    local capacityY = h - 8
 
-    -- Display reactor status above time to full charge
     if reactorsAreOn then
         monitor.setTextColor(colors.green)
         centerText("Reactors are ON", reactorStatusY)
@@ -462,7 +431,6 @@ local function displayHomePage()
     end
     monitor.setTextColor(colors.white)
 
-    -- Display time to full charge
     local timeToFullChargeText = ""
     if timeToFullCharge and timeToFullCharge > 0 then
         local hours = math.floor(timeToFullCharge / 3600)
@@ -478,51 +446,44 @@ local function displayHomePage()
     else
         timeToFullChargeText = "Power facility fully charged in: N/A"
     end
-    -- Center the timeToFullChargeText
     centerText(timeToFullChargeText, timeToFullChargeY)
 
-    -- Display total power capacity
-    monitor.setTextColor(colors.blue)  -- Set text color to blue
+    monitor.setTextColor(colors.blue)
     local capacityText = string.format("Total Power Capacity: %s / %s", formatEU(totalStored), formatEU(totalCapacity))
-    -- Center the capacityText
     centerText(capacityText, capacityY)
-    monitor.setTextColor(colors.white)  -- Reset text color to white
+    monitor.setTextColor(colors.white)
 
-    -- Display total fill percentage as a progress bar, centered above buttons
     local totalFillPercentage = 0
     if totalCapacity > 0 then
         totalFillPercentage = (totalStored / totalCapacity) * 100
     end
-    local progressBarWidth = w - 4  -- Leave some padding on sides
-    local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))  -- Adjust for border
+    local progressBarWidth = w - 4
+    local filledBars = math.floor((totalFillPercentage / 100) * (progressBarWidth - 2))
 
     local progressBarY = h - 7
 
-    -- Draw progress bar border
     monitor.setCursorPos(3, progressBarY)
     monitor.setBackgroundColor(colors.black)
-    monitor.write(string.rep(" ", progressBarWidth))  -- Top border
+    monitor.write(string.rep(" ", progressBarWidth))
 
     monitor.setCursorPos(3, progressBarY + 1)
-    monitor.write(" ")  -- Left border
+    monitor.write(" ")
     monitor.setCursorPos(2 + progressBarWidth, progressBarY + 1)
-    monitor.write(" ")  -- Right border
+    monitor.write(" ")
 
     monitor.setCursorPos(3, progressBarY + 2)
-    monitor.write(string.rep(" ", progressBarWidth))  -- Bottom border
+    monitor.write(string.rep(" ", progressBarWidth))
 
-    -- Draw filled portion
     setColorBasedOnPercentage(totalFillPercentage)
     monitor.setBackgroundColor(colors.black)
     monitor.setCursorPos(4, progressBarY + 1)
-    monitor.write(string.rep(" ", progressBarWidth - 2))  -- Clear inside
+    monitor.write(string.rep(" ", progressBarWidth - 2))
 
     monitor.setBackgroundColor(monitor.getTextColor())
     monitor.setCursorPos(4, progressBarY + 1)
     monitor.write(string.rep(" ", filledBars))
 
-    -- Write percentage over the progress bar
-    monitor.setBackgroundColor(colors.black)  -- Set background to black for percentage text
+    monitor.setBackgroundColor(colors.black)
     monitor.setTextColor(colors.white)
     local percentageText = formatPercentage(totalFillPercentage)
     local percentageX = math.floor((w - #percentageText) / 2) + 1
@@ -531,6 +492,7 @@ local function displayHomePage()
 
     monitor.setBackgroundColor(bgColor)
     monitor.setTextColor(colors.white)
+    centerButtons("home", pages.numReactorPages)
 end
 
 -- Function to send commands to reactor mainframe
@@ -547,7 +509,6 @@ end
 -- Function to monitor PESU levels and control reactors
 local function monitorPESU()
     while true do
-        -- Calculate fill percentages
         local anyPESUBelowThreshold = false
         local allPESUAtFull = true
 
@@ -571,7 +532,7 @@ local function monitorPESU()
             print("Command sent: turn_off_reactors")
         end
 
-        sleep(5)  -- Adjust sleep time as needed
+        sleep(5)
     end
 end
 
@@ -580,6 +541,9 @@ local function handleIncomingData()
     while true do
         local event, senderID, message, protocol = os.pullEvent("rednet_message")
         if type(message) == "table" and message.command then
+            if senderID == 7566 then
+                print("Received message from power sender:", senderID)
+            end
             if table.contains(allowedSenderIDs, senderID) or senderID == reactorMainframeID then
                 if message.command == "pesu_data" then
                     pesuDataFromSenders[senderID] = message
@@ -592,7 +556,7 @@ local function handleIncomingData()
                         chunkUnloaded = false
                     end
                 elseif message.command == "reactor_status" then
-                    reactorsStatus = message.status  -- "on" or "off"
+                    reactorsStatus = message.status
                     reactorsAreOn = (message.status == "on")
                     calculateTimeToFullCharge()
                     print(string.format("Reactor Status Updated: %s", reactorsStatus))
@@ -601,7 +565,6 @@ local function handleIncomingData()
                     calculateTimeToFullCharge()
                     print(string.format("Total EU Output Updated: %s EU/t", formatEU(totalEUOutput)))
                 end
-                -- Update chunk unloaded state
                 if page == "home" then
                     if os.time() - lastNonZeroDeltaTime >= 20 then
                         chunkUnloaded = true
@@ -611,7 +574,7 @@ local function handleIncomingData()
                 end
                 displayNeedsRefresh = true
             else
-                print("Received message from unauthorized sender ID:", senderID)
+                print("Received message from unknown computer ID:", senderID)
             end
         end
     end
@@ -643,7 +606,6 @@ end
 local function updateDisplay()
     if displayNeedsRefresh then
         if page == "home" then
-            -- Check if chunk is unloaded
             if os.time() - lastNonZeroDeltaTime >= 20 then
                 chunkUnloaded = true
             else
@@ -667,17 +629,11 @@ end
 
 -- Main function
 local function main()
-    page = "home"  -- Ensure the page is set to "home" on start
-
-    centerButtons()  -- Center the buttons at the start
-
-    -- Clear the monitor fully on startup
+    page = "home"
+    centerButtons()
     monitor.setBackgroundColor(bgColor)
     monitor.clear()
-
-    displayNeedsRefresh = true  -- Flag to indicate display needs refresh
-
-    -- Start data processing and page refreshing in parallel
+    displayNeedsRefresh = true
     parallel.waitForAll(
         handleIncomingData,
         monitorPESU,
@@ -687,5 +643,4 @@ local function main()
     )
 end
 
--- Start main function
 main()
