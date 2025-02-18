@@ -108,8 +108,8 @@ local function waitForChunksToLoad(seconds, status)
             waitingTime = waitingTime - 1
             timerID = os.startTimer(1)
         elseif event == "rednet_message" then
-            local senderID, message, protocol = p1, p2, p3
-            if message.command == "check_players" and senderID == reactorMainframeID then
+            local senderID, msg, protocol = p1, p2, p3
+            if type(msg) == "table" and msg.command == "check_players" and senderID == reactorMainframeID then
                 rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
             end
         end
@@ -118,10 +118,13 @@ end
 
 local function handleMessages()
     while true do
-        local event, p1, p2, p3 = os.pullEvent("rednet_message")
-        local senderID, message, protocol = p1, p2, p3
-        if message.command == "check_players" and senderID == reactorMainframeID then
-            rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
+        local event, senderID, msg, protocol = os.pullEvent("rednet_message")
+        if type(msg) == "table" then
+            if msg.command == "check_players" and senderID == reactorMainframeID then
+                rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
+            end
+        else
+            -- If msg is not a table, ignore it.
         end
     end
 end
@@ -139,8 +142,8 @@ local function mainLoop()
             countdown = countdown - 1
             timerID = os.startTimer(1)
         elseif event == "rednet_message" then
-            local senderID, message, protocol = p1, p2, p3
-            if message.command == "check_players" and senderID == reactorMainframeID then
+            local senderID, msg, protocol = p1, p2, p3
+            if type(msg) == "table" and msg.command == "check_players" and senderID == reactorMainframeID then
                 rednet.send(reactorMainframeID, {playersOnline = anyOnline}, "player_status")
             end
         end
